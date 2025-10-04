@@ -2,12 +2,13 @@
 // Controller for course CRUD operations
 
 import {
-  createCourse,
+  createCourse as createCourseService,
   getCourseById,
+  getCourseWithEnrollment,
   getCourses,
-  updateCourse,
+  updateCourse as updateCourseService,
   submitCourseForReview,
-  deleteCourse,
+  deleteCourse as deleteCourseService,
 } from '../services/courseService.js';
 
 import {
@@ -119,7 +120,7 @@ export const getAllCourses = async (req, res) => {
 
 /**
  * GET /courses/:id
- * Get a single course by ID
+ * Get a single course by ID with enrollment status
  * @access Private
  */
 export const getCourseDetails = async (req, res) => {
@@ -128,7 +129,8 @@ export const getCourseDetails = async (req, res) => {
     const userId = req.user.id;
     const userRole = req.user.role;
 
-    const course = await getCourseById(id);
+    // Get course with enrollment status for the current user
+    const course = await getCourseWithEnrollment(id, userId);
 
     if (!course) {
       return res.status(404).json({

@@ -85,6 +85,86 @@ export const getCourseById = async (courseId) => {
 };
 
 /**
+ * Get course by ID with enrollment status for a user
+ * @param {string} courseId - Course ID
+ * @param {string} userId - User ID (optional)
+ * @returns {Promise<Object|null>} Course with enrollment details
+ */
+export const getCourseWithEnrollment = async (courseId, userId = null) => {
+  try {
+    const course = await prisma.course.findUnique({
+      where: { id: courseId },
+      include: {
+        creator: {
+          select: {
+            id: true,
+            name: true,
+            username: true,
+            email: true,
+          }
+        },
+        lessons: {
+          orderBy: { order: 'asc' },
+          select: {
+            id: true,
+            title: true,
+            order: true,
+            duration: true,
+            videoUrl: true,
+            transcript: true,
+          }
+        },
+        _count: {
+          select: {
+            lessons: true,
+            enrollments: true,
+            certificates: true,
+          }
+        }
+      }
+    });
+
+    if (!course) {
+      return null;
+    }
+
+    // If userId provided, check enrollment status
+    let enrollment = null;
+    if (userId) {
+      enrollment = await prisma.enrollment.findUnique({
+        where: {
+          unique_user_course_enrollment: {
+            userId,
+            courseId
+          }
+        },
+        select: {
+          id: true,
+          progress: true,
+          enrolledAt: true,
+          completedAt: true,
+          certificate: {
+            select: {
+              id: true,
+              issuedAt: true
+            }
+          }
+        }
+      });
+    }
+
+    return {
+      ...course,
+      enrollment: enrollment || null,
+      isEnrolled: !!enrollment
+    };
+  } catch (error) {
+    logger.error('Error getting course with enrollment:', { courseId, userId, error: error.message });
+    throw error;
+  }
+};
+
+/**
  * Get courses with filters
  * @param {Object} filters - Query filters
  * @returns {Promise<Array>} List of courses
@@ -303,6 +383,7 @@ export const rejectCourse = async (courseId, adminId, feedback) => {
 export default {
   createCourse,
   getCourseById,
+  getCourseWithEnrollment,
   getCourses,
   updateCourse,
   submitCourseForReview,

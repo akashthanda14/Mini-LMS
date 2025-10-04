@@ -53,6 +53,33 @@
 
 **When to use**: Integrating into your server, migrating from old code
 
+### 📖 [ENROLLMENT_SYSTEM.md](./docs/ENROLLMENT_SYSTEM.md)
+**Learner enrollment and progress tracking**
+
+- ✅ Enrollment API endpoints
+- ✅ Progress calculation algorithm
+- ✅ Lesson completion tracking
+- ✅ Idempotent operations
+- ✅ Role-based access control
+- ✅ Frontend integration examples
+- ✅ Complete workflow examples
+- ✅ Testing guide
+
+**When to use**: Implementing learner features, tracking course progress, building frontend
+
+### 📖 [OPENAI_CONFIGURATION.md](./docs/OPENAI_CONFIGURATION.md)
+**OpenAI Whisper API for video transcription**
+
+- ✅ Configuration guide
+- ✅ Testing with real videos
+- ✅ Cost management
+- ✅ Error handling
+- ✅ Fallback strategies
+- ✅ Monitoring usage
+- ✅ Production checklist
+
+**When to use**: Setting up video transcription, managing OpenAI costs, troubleshooting transcripts
+
 ### 📖 [INTEGRATION_EXAMPLE.js](./INTEGRATION_EXAMPLE.js)
 **Copy-paste code examples**
 
