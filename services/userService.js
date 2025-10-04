@@ -26,7 +26,7 @@ export const createUser = async (userData) => {
       email: cleanUserData.email || null,
       phoneNumber: cleanUserData.phoneNumber || null,
       password: cleanUserData.password || null,
-      role: cleanUserData.role || 'USER', // Will use UserRole enum
+      role: cleanUserData.role || 'LEARNER', // Default role for new users
       emailVerified: cleanUserData.emailVerified ?? false,
       phoneVerified: cleanUserData.phoneVerified ?? false,
       isProfileComplete: cleanUserData.isProfileComplete ?? false,

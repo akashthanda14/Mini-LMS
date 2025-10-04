@@ -95,11 +95,20 @@ export const verifyPasswordResetToken = (token) => {
 
 /**
  * Create JWT token for authentication
+ * @param {Object} payload - User data to include in token
+ * @param {string} payload.userId - User ID
+ * @param {string} payload.email - User email
+ * @param {string} payload.role - User role (LEARNER, CREATOR, ADMIN)
+ * @param {string} expiresIn - Token expiration time
  */
-export const createAuthToken = (userId, expiresIn = '7d') => {
+export const createAuthToken = (payload, expiresIn = '7d') => {
+  const { userId, email, role } = payload;
+  
   const token = jwt.sign(
     {
       userId,
+      email,
+      role,
       purpose: 'authentication',
     },
     process.env.JWT_SECRET,
@@ -119,6 +128,8 @@ export const verifyAuthToken = (token) => {
     return {
       success: true,
       userId: decoded.userId,
+      email: decoded.email,
+      role: decoded.role,
       purpose: decoded.purpose,
     };
   } catch (error) {
