@@ -1,14 +1,15 @@
-// services/smsService-quickroute.js
-// SMS service using Quick Route for all messages (no verification needed)
-// This is an alternative to the OTP route that works immediately after recharge
+// services/smsService.js
+// SMS service for sending OTPs via Fast2SMS
+
+// Note: Fast2SMS is optional. If not configured, SMS will be logged to console.
 
 import axios from 'axios';
 
 const FAST2SMS_API_URL = 'https://www.fast2sms.com/dev/bulkV2';
 
 /**
- * Send OTP via Fast2SMS (Quick Route - No Verification Required)
- * Uses Quick route with custom message format
+ * Send OTP via Fast2SMS (OTP Route)
+ * Uses Fast2SMS OTP route which delivers: "Your OTP: {otp}"
  */
 export const sendOTP = async (phoneNumber, otp, purpose = 'verification') => {
   try {
@@ -28,31 +29,12 @@ export const sendOTP = async (phoneNumber, otp, purpose = 'verification') => {
       return { success: false, error: 'Invalid phone number format' };
     }
 
-    // Create message based on purpose
-    let message = '';
-    const expiryMinutes = process.env.OTP_EXPIRY_MINUTES || 10;
-    
-    switch (purpose) {
-      case 'registration':
-        message = `Your registration OTP is ${otp}. Valid for ${expiryMinutes} minutes. Do not share with anyone.`;
-        break;
-      case 'password_reset':
-        message = `Your password reset OTP is ${otp}. Valid for ${expiryMinutes} minutes. Do not share with anyone.`;
-        break;
-      case 'phone_change':
-        message = `Your phone verification OTP is ${otp}. Valid for ${expiryMinutes} minutes. Do not share with anyone.`;
-        break;
-      default:
-        message = `Your OTP is ${otp}. Valid for ${expiryMinutes} minutes. Do not share with anyone.`;
-    }
-
-    // Send OTP using Fast2SMS Quick route (works without verification)
+    // Send OTP using Fast2SMS OTP route
     const response = await axios.post(
       FAST2SMS_API_URL,
       new URLSearchParams({
-        message: message,
-        language: 'english',
-        route: 'q', // Quick route - no verification needed
+        variables_values: otp.toString(),
+        route: 'otp',
         numbers: cleanPhone,
       }),
       {
@@ -98,6 +80,7 @@ export const sendOTP = async (phoneNumber, otp, purpose = 'verification') => {
 
 /**
  * Send custom SMS notification via Fast2SMS (Quick Route)
+ * Uses Fast2SMS Quick route for custom messages
  */
 export const sendSMS = async (phoneNumber, message) => {
   try {
@@ -107,7 +90,7 @@ export const sendSMS = async (phoneNumber, message) => {
       return { success: true, message: 'SMS not configured (dev mode)' };
     }
 
-    // Clean phone number
+    // Clean phone number (remove country code if present, keep only 10 digits)
     const cleanPhone = phoneNumber.replace(/\D/g, '').slice(-10);
 
     // Validate phone number
