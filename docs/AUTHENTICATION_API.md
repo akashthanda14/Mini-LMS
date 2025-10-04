@@ -48,11 +48,13 @@ http://localhost:4000/api
 
 ## User Registration
 
-### 1. Register with Email
+Note: The server implements a two-step registration flow: first call POST /api/auth/register with either `email` or `phoneNumber` to create the account and trigger an OTP/email verification. After verification, you'll receive a secure `profileToken` to complete the profile (name/password) using `POST /api/auth/complete-profile` which returns a JWT. For details on profile completion, see [Profile Completion](./PROFILE_COMPLETION.md).
 
-**Endpoint:** `POST /user-auth/register-email`
+### 1. Register (email or phone)
 
-**Description:** Register a new user with email address
+**Endpoint:** `POST /api/auth/register`
+
+**Description:** Create a new user account using an email or a phone number. The server will send either an email verification link/OTP or an SMS OTP depending on which identifier you provide.
 
 **Request Headers:**
 ```json
@@ -61,149 +63,64 @@ http://localhost:4000/api
 }
 ```
 
-**Request Body:**
+**Request Body (email):**
 ```json
 {
-  "name": "John Doe",
-  "email": "john@example.com",
-  "password": "SecurePass123!",
-  "role": "LEARNER"
+  "email": "john@example.com"
 }
 ```
 
-**Field Validations:**
-- `name`: Required, 2-100 characters
-- `email`: Required, valid email format, must be unique
-- `password`: Required, minimum 8 characters, at least one uppercase, one lowercase, one number
-- `role`: Optional, one of: `LEARNER` (default), `CREATOR`
+**Request Body (phone):**
+```json
+{
+  "phoneNumber": "+919876543210"
+}
+```
 
-**Success Response (201 Created):**
+**Notes / Validations:**
+- The controller expects the phone field to be named `phoneNumber` (not `phone`).
+- This endpoint only creates the account and sends verification. Name/password are set in `POST /api/auth/complete-profile` after verification.
+
+**Success Responses:**
+- If an existing unverified user is provided, the endpoint will resend OTP/email and return 200 with `userId` and `verificationType`.
+- If new user created, returns 201 with `userId`, `verificationType`, and `contactInfo` (email or phoneNumber).
+
+Example success (new user, 201):
 ```json
 {
   "success": true,
-  "message": "Registration successful. Please verify your email with the OTP sent.",
-  "data": {
-    "user": {
-      "id": "550e8400-e29b-41d4-a716-446655440000",
-      "name": "John Doe",
-      "email": "john@example.com",
-      "role": "LEARNER",
-      "isVerified": false,
-      "createdAt": "2025-10-04T14:30:00.000Z"
-    },
-    "otpSent": true,
-    "expiresIn": 300
-  }
+  "message": "Registration successful. Check your email for verification.",
+  "userId": "550e8400-e29b-41d4-a716-446655440000",
+  "verificationType": "email",
+  "contactInfo": "john@example.com",
+  "requiresProfileCompletion": true
 }
 ```
 
-**Error Responses:**
-
-**400 Bad Request** - Invalid input:
-```json
-{
-  "success": false,
-  "message": "Validation error",
-  "errors": [
-    {
-      "field": "email",
-      "message": "Invalid email format"
-    }
-  ]
-}
-```
-
-**409 Conflict** - Email already exists:
-```json
-{
-  "success": false,
-  "message": "Email already registered"
-}
-```
-
----
-
-### 2. Register with Phone
-
-**Endpoint:** `POST /user-auth/register-phone`
-
-**Description:** Register a new user with phone number
-
-**Request Headers:**
-```json
-{
-  "Content-Type": "application/json"
-}
-```
-
-**Request Body:**
-```json
-{
-  "name": "Jane Smith",
-  "phone": "+919876543210",
-  "password": "SecurePass123!",
-  "role": "CREATOR"
-}
-```
-
-**Field Validations:**
-- `name`: Required, 2-100 characters
-- `phone`: Required, valid E.164 format (e.g., +919876543210), must be unique
-- `password`: Required, minimum 8 characters, at least one uppercase, one lowercase, one number
-- `role`: Optional, one of: `LEARNER` (default), `CREATOR`
-
-**Success Response (201 Created):**
+Example success (resend, 200):
 ```json
 {
   "success": true,
-  "message": "Registration successful. Please verify your phone with the OTP sent.",
-  "data": {
-    "user": {
-      "id": "550e8400-e29b-41d4-a716-446655440001",
-      "name": "Jane Smith",
-      "phone": "+919876543210",
-      "role": "CREATOR",
-      "isVerified": false,
-      "createdAt": "2025-10-04T14:35:00.000Z"
-    },
-    "otpSent": true,
-    "expiresIn": 300
-  }
+  "message": "OTP resent to your phone.",
+  "userId": "550e8400-e29b-41d4-a716-446655440001",
+  "verificationType": "phone",
+  "requiresProfileCompletion": false
 }
 ```
 
-**Error Responses:**
+**Errors:**
+- 400: Missing identifier
+- 409: If email/phone is already registered and verified
 
-**400 Bad Request** - Invalid phone:
-```json
-{
-  "success": false,
-  "message": "Invalid phone number format. Use E.164 format (e.g., +919876543210)"
-}
-```
-
-**409 Conflict** - Phone already exists:
-```json
-{
-  "success": false,
-  "message": "Phone number already registered"
-}
-```
 
 ---
 
-### 3. Verify Email OTP
 
-**Endpoint:** `POST /user-auth/verify-email-otp`
+### Verify Email OTP
 
-**Description:** Verify email with 6-digit OTP sent during registration
+**Endpoint:** `POST /api/auth/verify-email`
 
-**Request Headers:**
-```json
-{
-  "Content-Type": "application/json"
-}
-```
+**Description:** Verify email with the OTP/link sent during registration.
 
 **Request Body:**
 ```json
@@ -213,131 +130,67 @@ http://localhost:4000/api
 }
 ```
 
-**Field Validations:**
-- `email`: Required, must match registered email
-- `otp`: Required, exactly 6 digits
-
 **Success Response (200 OK):**
+- If the user already completed profile, response includes a JWT and the user object.
+- If the user still needs to complete profile, response returns a secure `profileToken` and `requiresProfileCompletion: true`.
+
+Example (profile complete):
 ```json
 {
   "success": true,
-  "message": "Email verified successfully",
-  "data": {
-    "user": {
-      "id": "550e8400-e29b-41d4-a716-446655440000",
-      "name": "John Doe",
-      "email": "john@example.com",
-      "role": "LEARNER",
-      "isVerified": true,
-      "verifiedAt": "2025-10-04T14:32:00.000Z"
-    }
-  }
+  "message": "Email verified successfully.",
+  "token": "<jwt>",
+  "user": { "id": "...", "email": "john@example.com", "isProfileComplete": true }
 }
 ```
 
-**Error Responses:**
-
-**400 Bad Request** - Invalid OTP:
+Example (profile incomplete):
 ```json
 {
-  "success": false,
-  "message": "Invalid or expired OTP"
+  "success": true,
+  "message": "Email verified successfully. Please complete your profile.",
+  "profileToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "requiresProfileCompletion": true
 }
 ```
 
-**404 Not Found** - Email not found:
-```json
-{
-  "success": false,
-  "message": "Email not found"
-}
-```
+### Verify Phone OTP
 
-**429 Too Many Requests** - Too many attempts:
-```json
-{
-  "success": false,
-  "message": "Too many failed attempts. Please request a new OTP."
-}
-```
+**Endpoint:** `POST /api/auth/verify-phone`
 
----
-
-### 4. Verify Phone OTP
-
-**Endpoint:** `POST /user-auth/verify-phone-otp`
-
-**Description:** Verify phone number with 6-digit OTP sent during registration
-
-**Request Headers:**
-```json
-{
-  "Content-Type": "application/json"
-}
-```
+**Description:** Verify phone with the OTP sent during registration.
 
 **Request Body:**
 ```json
 {
-  "phone": "+919876543210",
+  "phoneNumber": "+919876543210",
   "otp": "654321"
 }
 ```
 
-**Field Validations:**
-- `phone`: Required, must match registered phone
-- `otp`: Required, exactly 6 digits
+**Notes:** the controller expects the phone field named `phoneNumber`.
 
 **Success Response (200 OK):**
+- Returns a token and user object if profile was already completed, otherwise a secure `profileToken` and `requiresProfileCompletion: true`.
+
+Example (profile incomplete):
 ```json
 {
   "success": true,
-  "message": "Phone verified successfully",
-  "data": {
-    "user": {
-      "id": "550e8400-e29b-41d4-a716-446655440001",
-      "name": "Jane Smith",
-      "phone": "+919876543210",
-      "role": "CREATOR",
-      "isVerified": true,
-      "verifiedAt": "2025-10-04T14:37:00.000Z"
-    }
-  }
+  "message": "Phone verified successfully. Please complete your profile.",
+  "profileToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "requiresProfileCompletion": true
 }
 ```
 
-**Error Responses:**
-
-**400 Bad Request** - Invalid OTP:
-```json
-{
-  "success": false,
-  "message": "Invalid or expired OTP"
-}
-```
-
-**404 Not Found** - Phone not found:
-```json
-{
-  "success": false,
-  "message": "Phone number not found"
-}
-```
 
 ---
 
-### 5. Resend OTP
+### Resend OTP
 
-**Endpoint:** `POST /user-auth/resend-otp`
+**Endpoint:** `POST /api/auth/resend-otp`
 
-**Description:** Resend OTP to email or phone
-
-**Request Headers:**
-```json
-{
-  "Content-Type": "application/json"
-}
-```
+**Description:** Resend OTP for verification to email or phone number.
 
 **Request Body (Email):**
 ```json
@@ -349,63 +202,34 @@ http://localhost:4000/api
 **Request Body (Phone):**
 ```json
 {
-  "phone": "+919876543210"
+  "phoneNumber": "+919876543210"
 }
 ```
-
-**Field Validations:**
-- Must provide either `email` or `phone`
-- Cannot provide both
 
 **Success Response (200 OK):**
 ```json
 {
   "success": true,
-  "message": "OTP sent successfully",
-  "data": {
-    "otpSent": true,
-    "expiresIn": 300,
-    "sentTo": "john@example.com"
-  }
+  "message": "OTP resent to your email/phone.",
+  "userId": "550e8400-e29b-41d4-a716-446655440001",
+  "verificationType": "email|phone",
+  "requiresProfileCompletion": true|false
 }
 ```
 
-**Error Responses:**
-
-**400 Bad Request** - No identifier provided:
-```json
-{
-  "success": false,
-  "message": "Please provide either email or phone"
-}
-```
-
-**429 Too Many Requests** - Rate limited:
-```json
-{
-  "success": false,
-  "message": "Please wait 60 seconds before requesting another OTP"
-}
-```
+**Alternative Method:** Re-calling `POST /api/auth/register` with the same `email` or `phoneNumber` for an existing but unverified user will also trigger a resend of the verification OTP/email.
 
 ---
 
 ## User Login
 
-### 6. Login
+### Login
 
-**Endpoint:** `POST /auth/login`
+**Endpoint:** `POST /api/auth/login`
 
-**Description:** Login with email/phone and password to receive JWT token
+**Description:** Login with email/phone and password to receive a JWT token.
 
-**Request Headers:**
-```json
-{
-  "Content-Type": "application/json"
-}
-```
-
-**Request Body (Email):**
+**Request Body:**
 ```json
 {
   "emailOrPhone": "john@example.com",
@@ -413,325 +237,146 @@ http://localhost:4000/api
 }
 ```
 
-**Request Body (Phone):**
-```json
-{
-  "emailOrPhone": "+919876543210",
-  "password": "SecurePass123!"
-}
-```
-
-**Field Validations:**
-- `emailOrPhone`: Required, can be email or phone number
-- `password`: Required
+**Notes:**
+- `emailOrPhone` is a single string field — the controller detects whether it's an email or a phone number.
+- Phone vs email verification is enforced: unverified accounts are blocked from login.
 
 **Success Response (200 OK):**
 ```json
 {
   "success": true,
-  "message": "Login successful",
-  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-  "user": {
-    "id": "550e8400-e29b-41d4-a716-446655440000",
-    "name": "John Doe",
-    "email": "john@example.com",
-    "phone": null,
-    "role": "LEARNER",
-    "isVerified": true,
-    "createdAt": "2025-10-04T14:30:00.000Z"
-  }
+  "message": "Login successful.",
+  "token": "<jwt>",
+  "user": { "id": "...", "email": "...", "phoneNumber": "..." }
 }
 ```
 
 **Token Information:**
-- **Type:** Bearer JWT
-- **Expiry:** 7 days
-- **Usage:** Include in `Authorization` header: `Bearer <token>`
+- Type: Bearer JWT
+- Expiry: 7 days
+- Usage: Include in `Authorization` header: `Bearer <token>`
 
-**Error Responses:**
-
-**400 Bad Request** - Account not verified:
-```json
-{
-  "success": false,
-  "message": "Please verify your account before logging in"
-}
-```
-
-**401 Unauthorized** - Invalid credentials:
-```json
-{
-  "success": false,
-  "message": "Invalid credentials"
-}
-```
-
-**404 Not Found** - User not found:
-```json
-{
-  "success": false,
-  "message": "User not found"
-}
-```
+**Errors:**
+- 400: Missing fields
+- 401: Invalid credentials or user not found
+- 403: Account not verified (emailVerified/phoneVerified)
 
 ---
 
 ## Password Management
 
-### 7. Request Password Reset
+### Request Password Reset
 
-**Endpoint:** `POST /auth/forgot-password`
+**Endpoint:** `POST /api/auth/forgot-password`
 
-**Description:** Request password reset OTP
+**Description:** Request a password reset OTP. The controller expects a single string field `emailOrPhone` which can be either an email address or a phone number in `+91XXXXXXXXXX` format.
 
-**Request Headers:**
+**Request Body:**
 ```json
 {
-  "Content-Type": "application/json"
+  "emailOrPhone": "john@example.com"
 }
 ```
 
-**Request Body (Email):**
-```json
-{
-  "email": "john@example.com"
-}
-```
+**Behavior:**
+- If the account exists and is verified, an OTP is sent to the registered email or phone. If the account doesn't exist, the response is still 200 to avoid user enumeration.
+- Rate limiting is applied (max ~3 per minute in implementation).
 
-**Request Body (Phone):**
-```json
-{
-  "phone": "+919876543210"
-}
-```
-
-**Field Validations:**
-- Must provide either `email` or `phone`
-
-**Success Response (200 OK):**
+**Success (200):**
 ```json
 {
   "success": true,
-  "message": "Password reset OTP sent successfully",
-  "data": {
-    "otpSent": true,
-    "expiresIn": 300,
-    "sentTo": "john@example.com"
-  }
+  "message": "If an account with that email/phone exists, an OTP has been sent.",
+  "contactType": "email|phone",
+  "expiresIn": 600
 }
 ```
 
-**Error Responses:**
+### Reset Password (verify + set)
 
-**404 Not Found** - User not found:
+**Endpoint:** `POST /api/auth/reset-password`
+
+**Description:** The controller combines OTP verification and password reset into a single request. Provide `emailOrPhone`, the `otp`, and the `newPassword`.
+
+**Request Body:**
 ```json
 {
-  "success": false,
-  "message": "User not found"
-}
-```
-
-**429 Too Many Requests** - Rate limited:
-```json
-{
-  "success": false,
-  "message": "Too many reset requests. Please try again later."
-}
-```
-
----
-
-### 8. Verify Reset OTP
-
-**Endpoint:** `POST /auth/verify-reset-otp`
-
-**Description:** Verify OTP for password reset
-
-**Request Headers:**
-```json
-{
-  "Content-Type": "application/json"
-}
-```
-
-**Request Body (Email):**
-```json
-{
-  "email": "john@example.com",
-  "otp": "123456"
-}
-```
-
-**Request Body (Phone):**
-```json
-{
-  "phone": "+919876543210",
-  "otp": "654321"
-}
-```
-
-**Field Validations:**
-- Must provide either `email` or `phone`
-- `otp`: Required, exactly 6 digits
-
-**Success Response (200 OK):**
-```json
-{
-  "success": true,
-  "message": "OTP verified successfully",
-  "data": {
-    "verified": true,
-    "resetToken": "temp_reset_token_abc123"
-  }
-}
-```
-
-**Error Responses:**
-
-**400 Bad Request** - Invalid OTP:
-```json
-{
-  "success": false,
-  "message": "Invalid or expired OTP"
-}
-```
-
----
-
-### 9. Reset Password
-
-**Endpoint:** `POST /auth/reset-password`
-
-**Description:** Reset password after OTP verification
-
-**Request Headers:**
-```json
-{
-  "Content-Type": "application/json"
-}
-```
-
-**Request Body (Email):**
-```json
-{
-  "email": "john@example.com",
+  "emailOrPhone": "john@example.com",
   "otp": "123456",
   "newPassword": "NewSecurePass456!"
 }
 ```
 
-**Request Body (Phone):**
-```json
-{
-  "phone": "+919876543210",
-  "otp": "654321",
-  "newPassword": "NewSecurePass456!"
-}
-```
+**Validations:**
+- OTP must be 6 digits.
+- Password rules: at least 10 characters, contains uppercase and a number (controller enforces these checks).
 
-**Field Validations:**
-- Must provide either `email` or `phone`
-- `otp`: Required, exactly 6 digits
-- `newPassword`: Required, minimum 8 characters, at least one uppercase, one lowercase, one number
-
-**Success Response (200 OK):**
+**Success Response (200):**
+- Updates password, marks OTP used, and returns a JWT and user object:
 ```json
 {
   "success": true,
-  "message": "Password reset successful"
+  "message": "Password has been reset successfully.",
+  "token": "<jwt>",
+  "user": { "id": "...", "name": "...", "email": "..." }
 }
 ```
 
-**Error Responses:**
-
-**400 Bad Request** - Weak password:
-```json
-{
-  "success": false,
-  "message": "Password must be at least 8 characters with uppercase, lowercase, and number"
-}
-```
-
-**400 Bad Request** - Invalid OTP:
-```json
-{
-  "success": false,
-  "message": "Invalid or expired OTP"
-}
-```
+**Notes:**
+- The server does not implement a separate `verify-reset-otp` endpoint; verification and reset happen together.
 
 ---
 
-### 10. Change Password
+### Change Password
 
-**Endpoint:** `PUT /profile/change-password`
+(Unchanged: use `PUT /api/profile/change-password` with Authorization header.)
 
-**Description:** Change password for authenticated user
+See existing docs for the authenticated change-password flow — controllers for this endpoint live in the profile controller (not part of the two files inspected here).
+
+---
+
+## Token Management
+
+### Refresh Token
+
+**Endpoint:** `POST /api/auth/refresh`
+
+**Description:** Refresh an existing JWT token to extend its validity.
 
 **Request Headers:**
 ```json
 {
-  "Content-Type": "application/json",
   "Authorization": "Bearer <your_jwt_token>"
 }
 ```
-
-**Request Body:**
-```json
-{
-  "currentPassword": "SecurePass123!",
-  "newPassword": "NewSecurePass456!"
-}
-```
-
-**Field Validations:**
-- `currentPassword`: Required, must match current password
-- `newPassword`: Required, minimum 8 characters, at least one uppercase, one lowercase, one number
-- New password must be different from current password
 
 **Success Response (200 OK):**
 ```json
 {
   "success": true,
-  "message": "Password changed successfully"
+  "message": "Token refreshed successfully.",
+  "token": "<new_jwt_token>"
 }
 ```
 
 **Error Responses:**
 
-**401 Unauthorized** - No token:
+**401 Unauthorized** - Invalid or expired token:
 ```json
 {
   "success": false,
-  "message": "Access denied. No token provided."
+  "message": "Invalid token."
 }
 ```
-
-**401 Unauthorized** - Wrong current password:
-```json
-{
-  "success": false,
-  "message": "Current password is incorrect"
-}
-```
-
-**400 Bad Request** - Same password:
-```json
-{
-  "success": false,
-  "message": "New password must be different from current password"
-}
-```
-
----
 
 ## Profile Management
 
-### 11. Get User Profile
 
-**Endpoint:** `GET /profile`
+### Get User Profile
 
-**Description:** Get current user's profile information
+**Endpoint:** `GET /api/auth/me`
+
+**Description:** Returns the currently authenticated user's profile. This route is implemented in `routes/authRoutes.js` and requires the `ensureAuth` middleware.
 
 **Request Headers:**
 ```json
@@ -744,18 +389,7 @@ http://localhost:4000/api
 ```json
 {
   "success": true,
-  "data": {
-    "user": {
-      "id": "550e8400-e29b-41d4-a716-446655440000",
-      "name": "John Doe",
-      "email": "john@example.com",
-      "phone": "+919876543210",
-      "role": "LEARNER",
-      "isVerified": true,
-      "createdAt": "2025-10-04T14:30:00.000Z",
-      "updatedAt": "2025-10-04T14:30:00.000Z"
-    }
-  }
+  "user": { "id": "...", "name": "...", "email": "...", "phoneNumber": "..." }
 }
 ```
 

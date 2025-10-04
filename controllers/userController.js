@@ -24,8 +24,10 @@ import {
 import { sendOTP } from '../services/smsService.js';
 import { sendVerificationEmail } from '../services/mailService.js';
 import { 
-  createEmailVerificationToken, 
-  createAuthToken 
+  createEmailVerificationToken,
+  createProfileCompletionToken,
+  createAuthToken,
+  verifyProfileCompletionToken
 } from '../services/tokenService.js';
 
 /**
@@ -214,11 +216,13 @@ export const verifyEmailOtp = async (req, res) => {
         },
       });
     } else {
-      // User needs to complete profile
+      // User needs to complete profile - generate a secure profile completion token
+      const profileToken = createProfileCompletionToken(user.id);
+      
       return res.status(200).json({
         success: true,
         message: 'Email verified successfully. Please complete your profile.',
-        userId: user.id,
+        profileToken,
         requiresProfileCompletion: true,
       });
     }
@@ -271,11 +275,18 @@ export const verifyPhoneOtp = async (req, res) => {
 
     // Check if profile is complete
     if (user.isProfileComplete && user.name && user.password) {
+      // Create JWT with userId, email, and role
+      const token = createAuthToken({
+        userId: user.id,
+        email: user.phoneNumber, // Use phone as identifier
+        role: user.role
+      });
+      
       // User already has profile - login directly
       return res.status(200).json({
         success: true,
         message: 'Phone verified successfully.',
-        token: issueJwt(user.id),
+        token,
         user: {
           id: user.id,
           phoneNumber: user.phoneNumber,
@@ -285,11 +296,13 @@ export const verifyPhoneOtp = async (req, res) => {
         },
       });
     } else {
-      // User needs to complete profile
+      // User needs to complete profile - generate a secure profile completion token
+      const profileToken = createProfileCompletionToken(user.id);
+      
       return res.status(200).json({
         success: true,
         message: 'Phone verified successfully. Please complete your profile.',
-        userId: user.id,
+        profileToken,
         requiresProfileCompletion: true,
       });
     }
@@ -304,12 +317,12 @@ export const verifyPhoneOtp = async (req, res) => {
 
 /**
  * COMPLETE PROFILE
- * Completes user profile after OTP verification
+ * Completes user profile after OTP verification using a secure token
  */
 export const completeProfile = async (req, res) => {
   try {
     const {
-      userId,
+      profileToken,
       name,
       password,
       username,
@@ -320,10 +333,10 @@ export const completeProfile = async (req, res) => {
     } = req.body;
 
     // Required field validation
-    if (!userId || !name || !password) {
+    if (!profileToken || !name || !password) {
       return res.status(400).json({
         success: false,
-        message: 'User ID, name, and password are required.',
+        message: 'Profile token, name, and password are required.',
       });
     }
 
@@ -333,6 +346,17 @@ export const completeProfile = async (req, res) => {
         message: 'Password must be at least 8 characters long.',
       });
     }
+    
+    // Verify the profile completion token
+    const decodedToken = verifyProfileCompletionToken(profileToken);
+    if (!decodedToken.success) {
+      return res.status(401).json({
+        success: false,
+        message: 'Invalid or expired profile token. Please verify your email or phone again.',
+      });
+    }
+    
+    const userId = decodedToken.userId;
 
     // Find user
     const user = await findUserById(userId);

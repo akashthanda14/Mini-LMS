@@ -43,7 +43,7 @@ router.post('/verify-email-otp', verifyEmailOtp);
 // Verify Phone OTP
 router.post('/verify-phone-otp', verifyPhoneOtp);
 
-// Unified OTP verification endpoint
+// Unified OTP verification endpoint - handles both email and phone verification
 router.post('/verify-otp', async (req, res) => {
   try {
     const { email, phoneNumber, otp } = req.body;
@@ -54,6 +54,9 @@ router.post('/verify-otp', async (req, res) => {
         message: 'OTP is required',
       });
     }
+
+    // Store original request body to avoid side effects
+    const originalBody = { ...req.body };
 
     if (email) {
       await verifyEmailOtp(req, res);

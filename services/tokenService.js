@@ -29,6 +29,46 @@ export const createEmailVerificationToken = (userId, email) => {
 };
 
 /**
+ * Create profile completion token
+ * Used to secure the profile completion process after OTP verification
+ */
+export const createProfileCompletionToken = (userId) => {
+  const token = jwt.sign(
+    {
+      userId,
+      purpose: 'profile_completion',
+    },
+    process.env.JWT_SECRET,
+    { expiresIn: '1h' }
+  );
+  
+  return token;
+};
+
+/**
+ * Verify profile completion token
+ */
+export const verifyProfileCompletionToken = (token) => {
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    
+    if (decoded.purpose !== 'profile_completion') {
+      throw new Error('Invalid token purpose');
+    }
+    
+    return {
+      success: true,
+      userId: decoded.userId,
+    };
+  } catch (error) {
+    return {
+      success: false,
+      error: error.message,
+    };
+  }
+};
+
+/**
  * Verify email verification token
  */
 export const verifyEmailVerificationToken = (token) => {
@@ -146,6 +186,8 @@ export default {
   verifyEmailVerificationToken,
   createPasswordResetToken,
   verifyPasswordResetToken,
+  createProfileCompletionToken,
+  verifyProfileCompletionToken,
   createAuthToken,
   verifyAuthToken,
 };

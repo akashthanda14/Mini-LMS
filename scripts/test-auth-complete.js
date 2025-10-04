@@ -4,7 +4,7 @@
 import 'dotenv/config';
 import axios from 'axios';
 
-const BASE_URL = process.env.BASE_URL || 'http://localhost:4000/api';
+const BASE_URL ='http://localhost:4000/api';
 const TEST_EMAIL = 'akashthanda14@gmail.com';
 const TEST_PASSWORD = 'TestPass123!';
 const TEST_NAME = 'Akash Thanda';

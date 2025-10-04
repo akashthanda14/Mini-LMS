@@ -53,3 +53,15 @@ export {
   storePhoneOTP,
   verifyPhoneOtpService,
 } from './services/otpService.js';
+
+// Export token services
+export {
+  createAuthToken,
+  verifyAuthToken,
+  createEmailVerificationToken,
+  verifyEmailVerificationToken,
+  createPasswordResetToken,
+  verifyPasswordResetToken,
+  createProfileCompletionToken,
+  verifyProfileCompletionToken,
+} from './services/tokenService.js';
