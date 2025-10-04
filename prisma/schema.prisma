@@ -62,6 +62,7 @@ model User {
   // LMS Relations
   creatorApplication  CreatorApplication?
   coursesCreated      Course[]             @relation("CourseCreator")
+  coursesReviewed     Course[]             @relation("CourseReviewer")
   enrollments         Enrollment[]
   certificates        Certificate[]
   reviewedApplications CreatorApplication[] @relation("ApplicationReviewer")
@@ -125,11 +126,14 @@ model Course {
   status          CourseStatus  @default(DRAFT)
   submittedAt     DateTime?
   publishedAt     DateTime?
+  reviewedBy      String?       @db.Uuid
+  rejectionReason String?       @db.Text
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
   
   // Relations
   creator         User          @relation("CourseCreator", fields: [creatorId], references: [id], onDelete: Cascade)
+  reviewer        User?         @relation("CourseReviewer", fields: [reviewedBy], references: [id], onDelete: SetNull)
   lessons         Lesson[]
   enrollments     Enrollment[]
   certificates    Certificate[]
@@ -299,8 +303,9 @@ enum CreatorApplicationStatus {
 
 enum CourseStatus {
   DRAFT
-  SUBMITTED
+  PENDING
   PUBLISHED
+  REJECTED
   ARCHIVED
 }
 
