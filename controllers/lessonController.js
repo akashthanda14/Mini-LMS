@@ -25,7 +25,7 @@ import logger from '../config/logger.js';
 export const getUploadCredentials = async (req, res) => {
   try {
     const { courseId } = req.params;
-    const userId = req.user.userId;
+    const userId = req.user.id; // Changed from req.user.userId
 
     // Get course
     const course = await getCourseById(courseId);
@@ -99,7 +99,7 @@ export const getUploadCredentials = async (req, res) => {
 export const createNewLesson = async (req, res) => {
   try {
     const { courseId } = req.params;
-    const userId = req.user.userId;
+    const userId = req.user.id; // Changed from req.user.userId
     const lessonData = req.body;
 
     // Sanitize input
@@ -223,7 +223,7 @@ export const getCourseLessons = async (req, res) => {
 export const updateExistingLesson = async (req, res) => {
   try {
     const { id } = req.params;
-    const userId = req.user.userId;
+    const userId = req.user.id; // Changed from req.user.userId
     const updateData = req.body;
 
     // Sanitize input
@@ -293,7 +293,7 @@ export const updateExistingLesson = async (req, res) => {
 export const deleteExistingLesson = async (req, res) => {
   try {
     const { id } = req.params;
-    const userId = req.user.userId;
+    const userId = req.user.id; // Changed from req.user.userId
     const { deleteFromCloudinary = false } = req.query;
 
     // Get lesson with course details

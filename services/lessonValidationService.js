@@ -92,7 +92,7 @@ export const canAccessLessons = (course, user) => {
   }
 
   // Creators can access their own courses
-  if (course.creatorId === user.userId) {
+  if (course.creatorId === user.id) {
     return true;
   }
 
