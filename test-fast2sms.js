@@ -1,6 +1,7 @@
 // test-fast2sms.js
 // Quick test script for Fast2SMS integration
 
+import 'dotenv/config';
 import { sendOTP, sendSMS } from './services/smsService.js';
 
 const testFast2SMS = async () => {
