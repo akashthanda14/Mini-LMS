@@ -14,6 +14,8 @@ import { requestLogger, errorLogger } from './middleware/requestLogger.js';
 import userAuthRoutes from './routes/userRoutes.js';
 import adminAuthRoutes from './routes/adminRoutes.js';
 import authRoutes from './routes/authRoutes.js';
+import creatorRoutes from './routes/creatorRoutes.js';
+import adminApplicationRoutes from './routes/adminApplicationRoutes.js';
 
 // Load environment variables
 dotenv.config();
@@ -134,6 +136,12 @@ app.use('/api/user-auth', userAuthRoutes);
 
 // Admin authentication routes
 app.use('/api/admin-auth', adminAuthRoutes);
+
+// Creator application routes
+app.use('/api/creator', creatorRoutes);
+
+// Admin application review routes
+app.use('/api/admin/applications', adminApplicationRoutes);
 
 // ================================
 // ERROR HANDLING
