@@ -1,7 +1,7 @@
 // reset-test-data.js
 // Reset John's account back to LEARNER for testing
 
-import prisma from './lib/prisma.js';
+import prisma from '../lib/prisma.js';
 
 async function resetTestData() {
   try {

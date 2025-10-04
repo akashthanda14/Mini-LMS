@@ -4,7 +4,7 @@
 import dotenv from 'dotenv';
 dotenv.config();
 
-import { generateCertificate } from './services/certificateService.js';
+import { generateCertificate } from '../services/certificateService.js';
 
 const enrollmentId = '249615e3-3cd4-4bab-81ca-0e1645ebd2f7';
 

@@ -2,7 +2,7 @@
 // Send test SMS to specific number
 
 import 'dotenv/config';
-import { sendOTP, sendSMS } from './services/smsService.js';
+import { sendOTP, sendSMS } from '../services/smsService.js';
 
 const testNumber = '+916239562383';
 
