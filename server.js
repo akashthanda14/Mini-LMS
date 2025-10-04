@@ -20,6 +20,7 @@ import courseRoutes from './routes/courseRoutes.js';
 import adminCourseRoutes from './routes/adminCourseRoutes.js';
 import lessonRoutes from './routes/lessonRoutes.js';
 import enrollmentRoutes from './routes/enrollmentRoutes.js';
+import certificateRoutes from './routes/certificateRoutes.js';
 
 // Load environment variables
 dotenv.config();
@@ -158,6 +159,9 @@ app.use('/api', lessonRoutes);
 
 // Enrollment and progress routes
 app.use('/api', enrollmentRoutes);
+
+// Certificate routes
+app.use('/api', certificateRoutes);
 
 // ================================
 // ERROR HANDLING
