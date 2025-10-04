@@ -1,5 +1,6 @@
 import { PrismaClient } from '@prisma/client';
 import logger from '../config/logger.js';
+import { queueCertificateGeneration } from '../config/queue.js';
 
 const prisma = new PrismaClient();
 
@@ -110,6 +111,13 @@ export const getUserEnrollments = async (userId) => {
             }
           }
         },
+        certificate: {
+          select: {
+            id: true,
+            serialHash: true,
+            issuedAt: true
+          }
+        },
         _count: {
           select: {
             lessonProgress: {
@@ -133,7 +141,8 @@ export const getUserEnrollments = async (userId) => {
       progress: enrollment.progress,
       enrolledAt: enrollment.enrolledAt,
       completedAt: enrollment.completedAt,
-      certificateIssued: enrollment.certificateIssued,
+      certificate: enrollment.certificate,
+      hasCertificate: !!enrollment.certificate,
       totalLessons: enrollment.course._count.lessons,
       completedLessons: enrollment._count.lessonProgress,
       isCompleted: enrollment.completedAt !== null
@@ -277,8 +286,19 @@ export const recalculateProgress = async (enrollmentId) => {
         progress
       });
 
-      // TODO: Queue certificate issuance job
-      // await queueCertificateIssuance(enrollmentId);
+      // Queue certificate generation job
+      try {
+        await queueCertificateGeneration(enrollmentId);
+        logger.info('Certificate generation job queued', {
+          enrollmentId
+        });
+      } catch (error) {
+        logger.error('Failed to queue certificate generation', {
+          enrollmentId,
+          error: error.message
+        });
+        // Don't fail enrollment update if certificate queuing fails
+      }
     }
 
     // Update enrollment
