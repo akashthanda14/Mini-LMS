@@ -51,6 +51,28 @@ export const transcriptionQueue = new Queue('transcript-generation', {
   }
 });
 
+/**
+ * Certificate Generation Queue
+ * Handles async certificate generation jobs
+ */
+export const certificateQueue = new Queue('certificate-generation', {
+  connection: redisConnection,
+  defaultJobOptions: {
+    attempts: 3,
+    backoff: {
+      type: 'exponential',
+      delay: 3000
+    },
+    removeOnComplete: {
+      age: 30 * 24 * 3600, // Keep completed jobs for 30 days
+      count: 10000
+    },
+    removeOnFail: {
+      age: 30 * 24 * 3600 // Keep failed jobs for 30 days
+    }
+  }
+});
+
 // Log queue events
 transcriptionQueue.on('error', (error) => {
   logger.error('Transcription queue error', { error: error.message });
@@ -58,6 +80,14 @@ transcriptionQueue.on('error', (error) => {
 
 transcriptionQueue.on('waiting', ({ jobId }) => {
   logger.info('Job waiting in transcription queue', { jobId });
+});
+
+certificateQueue.on('error', (error) => {
+  logger.error('Certificate queue error', { error: error.message });
+});
+
+certificateQueue.on('waiting', ({ jobId }) => {
+  logger.info('Job waiting in certificate queue', { jobId });
 });
 
 /**
@@ -91,11 +121,39 @@ export const queueTranscription = async (lessonId, videoUrl) => {
 };
 
 /**
+ * Add a certificate generation job to the queue
+ * @param {string} enrollmentId - The enrollment ID
+ * @returns {Promise<Job>} The created job
+ */
+export const queueCertificateGeneration = async (enrollmentId) => {
+  try {
+    const job = await certificateQueue.add('generate-certificate', {
+      enrollmentId,
+      timestamp: new Date().toISOString()
+    });
+
+    logger.info('Certificate generation job queued', { 
+      jobId: job.id, 
+      enrollmentId 
+    });
+
+    return job;
+  } catch (error) {
+    logger.error('Error queuing certificate generation job', { 
+      enrollmentId, 
+      error: error.message 
+    });
+    throw error;
+  }
+};
+
+/**
  * Close all connections gracefully
  */
 export const closeConnections = async () => {
   try {
     await transcriptionQueue.close();
+    await certificateQueue.close();
     await redisConnection.quit();
     logger.info('BullMQ and Redis connections closed');
   } catch (error) {
@@ -105,7 +163,9 @@ export const closeConnections = async () => {
 
 export default {
   transcriptionQueue,
+  certificateQueue,
   queueTranscription,
+  queueCertificateGeneration,
   closeConnections,
   redisConnection
 };
