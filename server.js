@@ -16,6 +16,8 @@ import adminAuthRoutes from './routes/adminRoutes.js';
 import authRoutes from './routes/authRoutes.js';
 import creatorRoutes from './routes/creatorRoutes.js';
 import adminApplicationRoutes from './routes/adminApplicationRoutes.js';
+import courseRoutes from './routes/courseRoutes.js';
+import adminCourseRoutes from './routes/adminCourseRoutes.js';
 
 // Load environment variables
 dotenv.config();
@@ -142,6 +144,12 @@ app.use('/api/creator', creatorRoutes);
 
 // Admin application review routes
 app.use('/api/admin/applications', adminApplicationRoutes);
+
+// Course routes
+app.use('/api/courses', courseRoutes);
+
+// Admin course review routes
+app.use('/api/admin/courses', adminCourseRoutes);
 
 // ================================
 // ERROR HANDLING
