@@ -16,6 +16,7 @@ import {
   validateUpdatePermissions,
   validateDeletePermissions
 } from '../services/lessonValidationService.js';
+import { transcriptionQueue } from '../config/queue.js';
 import logger from '../config/logger.js';
 
 /**
@@ -344,6 +345,109 @@ export const deleteExistingLesson = async (req, res) => {
         message: 'Lesson not found'
       });
     }
+
+    return res.status(500).json({
+      success: false,
+      message: 'Internal server error'
+    });
+  }
+};
+
+/**
+ * Get transcript status for a lesson
+ * GET /lessons/:id/transcript-status
+ */
+export const getTranscriptStatus = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // Get lesson
+    const lesson = await getLessonById(id);
+
+    if (!lesson) {
+      return res.status(404).json({
+        success: false,
+        message: 'Lesson not found'
+      });
+    }
+
+    // Check if user can access this lesson
+    if (!canAccessLessons(lesson.course, req.user)) {
+      return res.status(403).json({
+        success: false,
+        message: 'Access denied'
+      });
+    }
+
+    // Check if transcript exists
+    if (lesson.transcript) {
+      return res.status(200).json({
+        success: true,
+        data: {
+          status: 'completed',
+          transcript: lesson.transcript,
+          lessonId: lesson.id
+        }
+      });
+    }
+
+    // Check job status in queue
+    try {
+      const jobs = await transcriptionQueue.getJobs(['waiting', 'active', 'completed', 'failed']);
+      const lessonJob = jobs.find(job => job.data.lessonId === id);
+
+      if (!lessonJob) {
+        return res.status(200).json({
+          success: true,
+          data: {
+            status: 'not_queued',
+            message: 'No transcription job found for this lesson',
+            lessonId: lesson.id
+          }
+        });
+      }
+
+      const jobState = await lessonJob.getState();
+      const progress = lessonJob.progress || 0;
+
+      let status = jobState;
+      let errorMessage = null;
+
+      if (jobState === 'failed') {
+        errorMessage = lessonJob.failedReason;
+      }
+
+      return res.status(200).json({
+        success: true,
+        data: {
+          status,
+          progress,
+          jobId: lessonJob.id,
+          lessonId: lesson.id,
+          error: errorMessage,
+          attempts: lessonJob.attemptsMade
+        }
+      });
+    } catch (queueError) {
+      logger.error('Error checking job status', { 
+        lessonId: id,
+        error: queueError.message 
+      });
+
+      return res.status(200).json({
+        success: true,
+        data: {
+          status: 'unknown',
+          message: 'Could not check job status',
+          lessonId: lesson.id
+        }
+      });
+    }
+  } catch (error) {
+    logger.error('Error getting transcript status', {
+      lessonId: req.params.id,
+      error: error.message
+    });
 
     return res.status(500).json({
       success: false,

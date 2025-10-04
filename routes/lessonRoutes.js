@@ -4,7 +4,8 @@ import {
   createNewLesson,
   getCourseLessons,
   updateExistingLesson,
-  deleteExistingLesson
+  deleteExistingLesson,
+  getTranscriptStatus
 } from '../controllers/lessonController.js';
 import { ensureAuth } from '../middleware/authMiddleware.js';
 import { requireCreator } from '../middleware/rbacMiddleware.js';
@@ -53,6 +54,13 @@ router.delete(
   ensureAuth,
   requireCreator,
   deleteExistingLesson
+);
+
+// Get transcript status (Authenticated users)
+router.get(
+  '/lessons/:id/transcript-status',
+  ensureAuth,
+  getTranscriptStatus
 );
 
 export default router;

@@ -7,6 +7,7 @@
   "scripts": {
     "start": "node server.js",
     "dev": "nodemon server.js",
+    "worker": "node workers/transcriptionWorker.js",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "prisma:studio": "prisma studio",
@@ -25,6 +26,7 @@
   "license": "ISC",
   "dependencies": {
     "@prisma/client": "^5.20.0",
+    "axios": "^1.12.2",
     "bcrypt": "^6.0.0",
     "bcryptjs": "^2.4.3",
     "bullmq": "^5.60.0",
@@ -32,9 +34,11 @@
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
     "express": "^4.19.2",
+    "form-data": "^4.0.4",
     "ioredis": "^5.8.0",
     "jsonwebtoken": "^9.0.2",
     "nodemailer": "^6.9.15",
+    "openai": "^6.1.0",
     "redis": "^5.8.3",
     "swagger-jsdoc": "^6.2.8",
     "swagger-ui-express": "^5.0.1",
