@@ -13,6 +13,7 @@ import { requestLogger, errorLogger } from './middleware/requestLogger.js';
 // Import authentication routes
 import userAuthRoutes from './routes/userRoutes.js';
 import adminAuthRoutes from './routes/adminRoutes.js';
+import authRoutes from './routes/authRoutes.js';
 
 // Load environment variables
 dotenv.config();
@@ -82,6 +83,7 @@ app.get('/api', (req, res) => {
     description: 'User authentication and profile management system',
     endpoints: {
       health: '/health',
+      auth: '/api/auth',
       userAuth: '/api/user-auth',
       adminAuth: '/api/admin-auth',
       docs: '/api-docs',
@@ -123,6 +125,9 @@ app.get('/api-docs.json', (req, res) => {
 // ================================
 // AUTHENTICATION ROUTES
 // ================================
+
+// Authentication routes (login, register, /auth/me)
+app.use('/api/auth', authRoutes);
 
 // User authentication routes
 app.use('/api/user-auth', userAuthRoutes);
