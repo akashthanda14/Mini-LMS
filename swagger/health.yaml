@@ -1,0 +1,95 @@
+openapi: 3.0.0
+info:
+  title: LMS Authentication API - Health & Status
+  version: 1.0.0
+
+paths:
+  /health:
+    get:
+      tags:
+        - Health
+      summary: Health check
+      description: Check if the server and database are running properly
+      responses:
+        '200':
+          description: Server is healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: OK
+                  message:
+                    type: string
+                    example: Server is running
+                  timestamp:
+                    type: string
+                    format: date-time
+                  database:
+                    type: string
+                    example: Connected
+                  environment:
+                    type: string
+                    example: development
+        '503':
+          description: Service unavailable
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: ERROR
+                  message:
+                    type: string
+                    example: Service unavailable
+                  timestamp:
+                    type: string
+                    format: date-time
+                  database:
+                    type: string
+                    example: Disconnected
+                  error:
+                    type: string
+
+  /api:
+    get:
+      tags:
+        - Health
+      summary: API information
+      description: Get API information and available endpoints
+      responses:
+        '200':
+          description: API information
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  name:
+                    type: string
+                    example: LMS Authentication API
+                  version:
+                    type: string
+                    example: 1.0.0
+                  description:
+                    type: string
+                    example: User authentication and profile management system
+                  endpoints:
+                    type: object
+                    properties:
+                      health:
+                        type: string
+                        example: /health
+                      userAuth:
+                        type: string
+                        example: /api/user-auth
+                      adminAuth:
+                        type: string
+                        example: /api/admin-auth
+                  documentation:
+                    type: string
+                    example: See README.md for detailed API documentation

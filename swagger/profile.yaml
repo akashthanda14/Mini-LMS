@@ -1,0 +1,280 @@
+openapi: 3.0.0
+info:
+  title: LMS Authentication API - Profile Management
+  version: 1.0.0
+
+paths:
+  /api/user-auth/request-email-change:
+    post:
+      tags:
+        - Profile
+      summary: Request email change
+      description: Request to change email address. Sends OTP to new email for verification.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - newEmail
+              properties:
+                newEmail:
+                  type: string
+                  format: email
+                  example: newemail@example.com
+      responses:
+        '200':
+          description: OTP sent to new email
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: OTP sent to your new email address
+        '400':
+          description: Invalid email or email already in use
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Unauthorized - Invalid or missing token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/user-auth/verify-email-change:
+    post:
+      tags:
+        - Profile
+      summary: Verify email change
+      description: Verify OTP and complete email change
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - otp
+              properties:
+                otp:
+                  type: string
+                  example: "123456"
+      responses:
+        '200':
+          description: Email changed successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: Email updated successfully
+                  user:
+                    $ref: '#/components/schemas/User'
+        '400':
+          description: Invalid or expired OTP
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/user-auth/request-phone-change:
+    post:
+      tags:
+        - Profile
+      summary: Request phone change
+      description: Request to change phone number. Sends OTP to new phone for verification.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - newPhoneNumber
+              properties:
+                newPhoneNumber:
+                  type: string
+                  example: "+1234567890"
+      responses:
+        '200':
+          description: OTP sent to new phone
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: OTP sent to your new phone number
+        '400':
+          description: Invalid phone or phone already in use
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/user-auth/verify-phone-change:
+    post:
+      tags:
+        - Profile
+      summary: Verify phone change
+      description: Verify OTP and complete phone number change
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - otp
+              properties:
+                otp:
+                  type: string
+                  example: "123456"
+      responses:
+        '200':
+          description: Phone changed successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: Phone number updated successfully
+                  user:
+                    $ref: '#/components/schemas/User'
+        '400':
+          description: Invalid or expired OTP
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/user-auth/auth/status:
+    get:
+      tags:
+        - Profile
+      summary: Get authentication status
+      description: Get current user authentication status and profile information
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Authentication status retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  authenticated:
+                    type: boolean
+                    example: true
+                  user:
+                    $ref: '#/components/schemas/User'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  authenticated:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+                    example: Not authenticated
+
+  /api/user-auth/auth/resend-otp:
+    post:
+      tags:
+        - Profile
+      summary: Resend OTP
+      description: Resend OTP for verification (email or phone)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                email:
+                  type: string
+                  format: email
+                  example: user@example.com
+                phoneNumber:
+                  type: string
+                  example: "+1234567890"
+                purpose:
+                  type: string
+                  enum: [registration, password_reset, email_change, phone_change]
+                  example: registration
+              oneOf:
+                - required: [email]
+                - required: [phoneNumber]
+      responses:
+        '200':
+          description: OTP resent successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Success'
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
