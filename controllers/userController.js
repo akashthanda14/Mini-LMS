@@ -23,10 +23,10 @@ import {
 } from '../services/otpService.js';
 import { sendOTP } from '../services/smsService.js';
 import { sendVerificationEmail } from '../services/mailService.js';
-import { createEmailVerificationToken } from '../services/tokenService.js';
-
-// Helper JWT issuer
-const issueJwt = (id) => jwt.sign({ id }, process.env.JWT_SECRET, { expiresIn: '7d' });
+import { 
+  createEmailVerificationToken, 
+  createAuthToken 
+} from '../services/tokenService.js';
 
 /**
  * REGISTER USER
@@ -186,15 +186,29 @@ export const verifyEmailOtp = async (req, res) => {
 
     // Check if profile is complete
     if (user.isProfileComplete && user.name && user.password) {
+      // Update last login
+      await prisma.user.update({
+        where: { id: user.id },
+        data: { lastLoginAt: new Date() }
+      });
+
+      // Create JWT with userId, email, and role
+      const token = createAuthToken({
+        userId: user.id,
+        email: user.email,
+        role: user.role
+      });
+
       // User already has profile - login directly
       return res.status(200).json({
         success: true,
         message: 'Email verified successfully.',
-        token: issueJwt(user.id),
+        token,
         user: {
           id: user.id,
           email: user.email,
           name: user.name,
+          role: user.role,
           emailVerified: true,
           isProfileComplete: true,
         },
@@ -397,10 +411,17 @@ export const completeProfile = async (req, res) => {
 
     console.log('Profile completed for user:', userId);
 
+    // Create JWT with userId, email, and role
+    const token = createAuthToken({
+      userId: updatedUser.id,
+      email: updatedUser.email || updatedUser.phoneNumber,
+      role: updatedUser.role
+    });
+
     return res.status(200).json({
       success: true,
       message: 'Profile completed successfully.',
-      token: issueJwt(updatedUser.id),
+      token,
       user: updatedUser,
     });
   } catch (err) {
@@ -499,14 +520,30 @@ export const loginUser = async (req, res) => {
       });
     }
 
+    // Update last login timestamp
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { lastLoginAt: new Date() }
+    });
+
+    // Create JWT with userId, email, and role
+    const token = createAuthToken({
+      userId: user.id,
+      email: user.email || user.phoneNumber,
+      role: user.role
+    });
+
     return res.status(200).json({
       success: true,
-      token: issueJwt(user.id),
+      message: 'Login successful.',
+      token,
       user: {
         id: user.id,
         name: user.name,
+        username: user.username,
         email: user.email,
         phoneNumber: user.phoneNumber,
+        role: user.role,
         emailVerified: user.emailVerified,
         phoneVerified: user.phoneVerified,
         isProfileComplete: user.isProfileComplete,
