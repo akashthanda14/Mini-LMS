@@ -20,6 +20,9 @@ import {
   sanitizeCourseData,
 } from '../services/courseValidationService.js';
 
+import { uploadImageToCloudinary, deleteImage, extractPublicId } from '../config/cloudinary.js';
+import logger from '../config/logger.js';
+
 /**
  * POST /courses
  * Create a new course
@@ -29,6 +32,34 @@ export const createNewCourse = async (req, res) => {
   try {
     const creatorId = req.user.id;
     const courseData = req.body;
+
+    // Handle thumbnail upload if file provided
+    if (req.file) {
+      try {
+        logger.info('Uploading course thumbnail to Cloudinary', {
+          filename: req.file.originalname,
+          size: req.file.size,
+        });
+
+        const uploadResult = await uploadImageToCloudinary(
+          req.file.buffer,
+          'course-thumbnails'
+        );
+
+        courseData.thumbnail = uploadResult.secure_url;
+        
+        logger.info('Thumbnail uploaded successfully', {
+          url: uploadResult.secure_url,
+        });
+      } catch (uploadError) {
+        logger.error('Thumbnail upload failed', { error: uploadError.message });
+        return res.status(400).json({
+          success: false,
+          message: 'Failed to upload thumbnail image',
+          error: uploadError.message,
+        });
+      }
+    }
 
     // Sanitize input
     const sanitizedData = sanitizeCourseData(courseData);
@@ -53,6 +84,7 @@ export const createNewCourse = async (req, res) => {
         id: course.id,
         title: course.title,
         description: course.description,
+        thumbnail: course.thumbnail,
         status: course.status,
         createdAt: course.createdAt,
       },
@@ -230,6 +262,48 @@ export const updateExistingCourse = async (req, res) => {
       });
     }
 
+    // Handle thumbnail upload if file provided
+    if (req.file) {
+      try {
+        logger.info('Uploading new course thumbnail to Cloudinary', {
+          courseId: id,
+          filename: req.file.originalname,
+          size: req.file.size,
+        });
+
+        // Delete old thumbnail if exists
+        if (course.thumbnail) {
+          const oldPublicId = extractPublicId(course.thumbnail);
+          if (oldPublicId) {
+            try {
+              await deleteImage(oldPublicId);
+              logger.info('Old thumbnail deleted', { publicId: oldPublicId });
+            } catch (deleteError) {
+              logger.warn('Could not delete old thumbnail', { error: deleteError.message });
+            }
+          }
+        }
+
+        const uploadResult = await uploadImageToCloudinary(
+          req.file.buffer,
+          'course-thumbnails'
+        );
+
+        updateData.thumbnail = uploadResult.secure_url;
+        
+        logger.info('New thumbnail uploaded successfully', {
+          url: uploadResult.secure_url,
+        });
+      } catch (uploadError) {
+        logger.error('Thumbnail upload failed', { error: uploadError.message });
+        return res.status(400).json({
+          success: false,
+          message: 'Failed to upload thumbnail image',
+          error: uploadError.message,
+        });
+      }
+    }
+
     // Sanitize input
     const sanitizedData = sanitizeCourseData(updateData);
 
@@ -244,7 +318,7 @@ export const updateExistingCourse = async (req, res) => {
     }
 
     // Update course
-    const updatedCourse = await updateCourse(id, sanitizedData);
+    const updatedCourse = await updateCourseService(id, sanitizedData);
 
     return res.status(200).json({
       success: true,
@@ -253,6 +327,7 @@ export const updateExistingCourse = async (req, res) => {
         id: updatedCourse.id,
         title: updatedCourse.title,
         description: updatedCourse.description,
+        thumbnail: updatedCourse.thumbnail,
         status: updatedCourse.status,
         updatedAt: updatedCourse.updatedAt,
       },

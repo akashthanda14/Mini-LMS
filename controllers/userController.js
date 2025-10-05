@@ -53,7 +53,8 @@ export const registerUser = async (req, res) => {
         const otp = String(Math.floor(100000 + Math.random() * 900000));
         await storeEmailOTP(existing.id, otp);
 
-        await sendVerificationEmail(existing.email, token, otp, 'User');
+        await sendVerificationEmail(existing.email, token, otp, 'User')
+          .catch(err => console.error('Email failed:', err));
 
         return res.status(200).json({
           success: true,
@@ -76,7 +77,8 @@ export const registerUser = async (req, res) => {
       const otp = String(Math.floor(100000 + Math.random() * 900000));
       await storeEmailOTP(user.id, otp);
 
-      await sendVerificationEmail(user.email, token, otp, 'User');
+      await sendVerificationEmail(user.email, token, otp, 'User')
+        .catch(err => console.error('Email failed:', err));
 
       return res.status(201).json({
         success: true,

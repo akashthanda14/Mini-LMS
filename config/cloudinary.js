@@ -145,4 +145,69 @@ export const isCloudinaryUrl = (url) => {
   return url.includes('cloudinary.com') && url.includes('/video/');
 };
 
+/**
+ * Upload image buffer to Cloudinary (server-side)
+ * @param {Buffer} buffer - Image buffer from multer
+ * @param {string} folder - Folder to upload to (default: 'course-thumbnails')
+ * @param {string} publicId - Optional public ID
+ * @returns {Promise<object>} Upload result with secure_url
+ */
+export const uploadImageToCloudinary = (buffer, folder = 'course-thumbnails', publicId = null) => {
+  return new Promise((resolve, reject) => {
+    const uploadOptions = {
+      folder,
+      resource_type: 'image',
+      transformation: [
+        { width: 1280, height: 720, crop: 'limit' }, // Max size
+        { quality: 'auto:good' }, // Auto quality optimization
+        { fetch_format: 'auto' } // Auto format (webp for modern browsers)
+      ],
+    };
+
+    if (publicId) {
+      uploadOptions.public_id = publicId;
+    }
+
+    const uploadStream = cloudinary.uploader.upload_stream(
+      uploadOptions,
+      (error, result) => {
+        if (error) {
+          logger.error('Cloudinary upload error', { error: error.message });
+          return reject(error);
+        }
+        logger.info('Image uploaded to Cloudinary', { 
+          publicId: result.public_id,
+          url: result.secure_url 
+        });
+        resolve(result);
+      }
+    );
+
+    uploadStream.end(buffer);
+  });
+};
+
+/**
+ * Delete image from Cloudinary
+ * @param {string} publicId - The public ID of the image to delete
+ * @returns {Promise<object>} Deletion result
+ */
+export const deleteImage = async (publicId) => {
+  try {
+    const result = await cloudinary.uploader.destroy(publicId, {
+      resource_type: 'image',
+      invalidate: true
+    });
+
+    logger.info('Deleted image from Cloudinary', { publicId, result });
+    return result;
+  } catch (error) {
+    logger.error('Error deleting image from Cloudinary', { 
+      publicId, 
+      error: error.message 
+    });
+    throw error;
+  }
+};
+
 export default cloudinary;

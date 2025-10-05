@@ -5,6 +5,7 @@ import express from 'express';
 import { ensureAuth } from '../middleware/authMiddleware.js';
 import { requireCreator } from '../middleware/rbacMiddleware.js';
 import { validateUUID } from '../middleware/validationMiddleware.js';
+import { uploadSingleImage, handleUploadError } from '../middleware/uploadMiddleware.js';
 import {
   createNewCourse,
   getAllCourses,
@@ -19,10 +20,18 @@ const router = express.Router();
 
 /**
  * @route   POST /api/courses
- * @desc    Create a new course (DRAFT status)
+ * @desc    Create a new course (DRAFT status) with optional thumbnail upload
  * @access  Private - CREATOR only
+ * @body    multipart/form-data with 'thumbnail' file field + other course fields
  */
-router.post('/', ensureAuth, requireCreator, createNewCourse);
+router.post(
+  '/',
+  ensureAuth,
+  requireCreator,
+  uploadSingleImage('thumbnail'),
+  handleUploadError,
+  createNewCourse
+);
 
 /**
  * @route   GET /api/courses
@@ -40,10 +49,19 @@ router.get('/:id', ensureAuth, validateUUID('id'), getCourseDetails);
 
 /**
  * @route   PATCH /api/courses/:id
- * @desc    Update a course (DRAFT only, own courses only)
+ * @desc    Update a course (DRAFT only, own courses only) with optional thumbnail upload
  * @access  Private - CREATOR only
+ * @body    multipart/form-data with optional 'thumbnail' file field + other course fields
  */
-router.patch('/:id', ensureAuth, requireCreator, validateUUID('id'), updateExistingCourse);
+router.patch(
+  '/:id',
+  ensureAuth,
+  requireCreator,
+  validateUUID('id'),
+  uploadSingleImage('thumbnail'),
+  handleUploadError,
+  updateExistingCourse
+);
 
 /**
  * @route   POST /api/courses/:courseId/thumbnail/upload
