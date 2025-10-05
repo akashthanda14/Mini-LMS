@@ -3,7 +3,6 @@
 
 // Export all routes
 export { default as userRoutes } from './routes/userRoutes.js';
-export { default as adminRoutes } from './routes/adminRoutes.js';
 
 // Export user controllers
 export {
@@ -27,11 +26,6 @@ export {
   requestPhoneChange,
   verifyPhoneChange,
 } from './controllers/profileController.js';
-
-// Export admin controllers
-export {
-  adminLogin,
-} from './controllers/adminController.js';
 
 // Export user services
 export {

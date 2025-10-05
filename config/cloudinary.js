@@ -19,13 +19,12 @@ export const generateUploadSignature = (publicId, folder = 'course-videos') => {
   try {
     const timestamp = Math.round(Date.now() / 1000);
     
+    // Only include parameters that will be sent in the upload request
+    // These MUST match exactly what the frontend sends
     const params = {
       timestamp,
       public_id: publicId,
-      folder,
-      resource_type: 'video',
-      eager: 'sp_hd/mp4', // Auto-generate HD MP4 version
-      eager_async: true
+      folder
     };
 
     // Generate signature
@@ -34,7 +33,7 @@ export const generateUploadSignature = (publicId, folder = 'course-videos') => {
       process.env.CLOUDINARY_API_SECRET
     );
 
-    logger.info('Generated Cloudinary upload signature', { publicId, folder });
+    logger.info('Generated Cloudinary upload signature', { publicId, folder, timestamp });
 
     return {
       signature,
@@ -42,10 +41,7 @@ export const generateUploadSignature = (publicId, folder = 'course-videos') => {
       public_id: publicId,
       folder,
       api_key: process.env.CLOUDINARY_API_KEY,
-      cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-      resource_type: 'video',
-      eager: 'sp_hd/mp4',
-      eager_async: true
+      cloud_name: process.env.CLOUDINARY_CLOUD_NAME
     };
   } catch (error) {
     logger.error('Error generating Cloudinary signature', { error: error.message });

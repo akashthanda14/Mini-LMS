@@ -12,10 +12,10 @@ import { requestLogger, errorLogger } from './middleware/requestLogger.js';
 
 // Import authentication routes
 import userAuthRoutes from './routes/userRoutes.js';
-import adminAuthRoutes from './routes/adminRoutes.js';
 import authRoutes from './routes/authRoutes.js';
 import creatorRoutes from './routes/creatorRoutes.js';
 import adminApplicationRoutes from './routes/adminApplicationRoutes.js';
+import adminMetricsRoutes from './routes/adminMetricsRoutes.js';
 import courseRoutes from './routes/courseRoutes.js';
 import adminCourseRoutes from './routes/adminCourseRoutes.js';
 import lessonRoutes from './routes/lessonRoutes.js';
@@ -92,7 +92,6 @@ app.get('/api', (req, res) => {
       health: '/health',
       auth: '/api/auth',
       userAuth: '/api/user-auth',
-      adminAuth: '/api/admin-auth',
       docs: '/api-docs',
       swaggerJson: '/api-docs.json',
     },
@@ -139,14 +138,14 @@ app.use('/api/auth', authRoutes);
 // User authentication routes
 app.use('/api/user-auth', userAuthRoutes);
 
-// Admin authentication routes
-app.use('/api/admin-auth', adminAuthRoutes);
-
 // Creator application routes
 app.use('/api/creator', creatorRoutes);
 
 // Admin application review routes
 app.use('/api/admin/applications', adminApplicationRoutes);
+
+// Admin metrics and analytics routes
+app.use('/api/admin/metrics', adminMetricsRoutes);
 
 // Course routes
 app.use('/api/courses', courseRoutes);
@@ -259,7 +258,6 @@ const server = app.listen(PORT, HOST, async () => {
   logger.info(`   Health Check:  http://localhost:${PORT}/health`);
   logger.info(`   API Info:      http://localhost:${PORT}/api`);
   logger.info(`   User Auth:     http://localhost:${PORT}/api/user-auth`);
-  logger.info(`   Admin Auth:    http://localhost:${PORT}/api/admin-auth`);
   logger.info(`   📖 API Docs:   http://localhost:${PORT}/api-docs`);
   logger.info('='.repeat(60));
   
