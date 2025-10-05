@@ -52,6 +52,55 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use(requestLogger);
 
 // ================================
+// ROOT ROUTE - IMPRESSIVE API INFO
+// ================================
+
+// Root endpoint with comprehensive API information
+app.get('/', (req, res) => {
+  res.json({
+    message: '🚀 Welcome to Mini-LMS API - A Modern Full-Stack Learning Management System',
+    description: 'Production-ready LMS with role-based authentication, course management, video transcription, and cloud media storage. Built for scalability and performance.',
+    version: '1.0.0',
+    services: [
+      'Node.js (ESM)', 'Express.js', 'Prisma ORM', 'PostgreSQL (Neon)', 'Redis (BullMQ)', 
+      'Cloudinary (Media)', 'OpenAI Whisper (Transcription)', 'Fast2SMS (OTP)', 'JWT (Auth)', 
+      'Multer (Uploads)', 'Nodemailer (Email)', 'Winston (Logging)', 'Zod (Validation)'
+    ],
+    apiDocs: '/api-docs',
+    features: [
+      'User Registration & Authentication (Email/Phone)',
+      'Role-Based Access Control (LEARNER/CREATOR/ADMIN)',
+      'Course Creation & Management with Image Uploads',
+      'Video Transcription via OpenAI Whisper',
+      'Certificate Generation & PDF Streaming',
+      'Admin Dashboard with Metrics & Analytics',
+      'Background Job Processing (BullMQ + Redis)',
+      'Cloud Media Storage & Optimization'
+    ],
+    stats: {
+      totalEndpoints: 25,
+      supportedRoles: ['LEARNER', 'CREATOR', 'ADMIN'],
+      mediaStorage: 'Cloudinary (Auto-optimized)',
+      database: 'PostgreSQL with Prisma ORM',
+      queueSystem: 'Redis + BullMQ Workers',
+      aiIntegration: 'OpenAI Whisper for Video Transcription'
+    },
+    endpoints: {
+      health: '/health',
+      apiInfo: '/api',
+      auth: '/api/auth',
+      courses: '/api/courses',
+      admin: '/api/admin',
+      docs: '/api-docs',
+      swaggerJson: '/api-docs.json'
+    },
+    documentation: 'Visit /api-docs for interactive Swagger documentation',
+    github: 'https://github.com/akashthanda14/Mini-LMS',
+    techStack: 'Full-stack LMS: Next.js 15 + React 18 frontend (TypeScript, Tailwind, React Query, Zod, Cloudinary); Node.js + Express backend (Prisma, PostgreSQL, Redis, BullMQ, OpenAI Whisper, JWT RBAC, Fast2SMS SMS, Multer→Cloudinary video/image uploads).'
+  });
+});
+
+// ================================
 // HEALTH CHECK & INFO ROUTES
 // ================================
 
