@@ -39,7 +39,7 @@ try {
 
 // Test 3: Download a small test video
 console.log('\n✓ Test 3: Download Test Video');
-const testVideoUrl = 'https://res.cloudinary.com/dumurymxf/video/upload/v1696345679/test2.mp4';
+const testVideoUrl = 'https://res.cloudinary.com/dmt4dj8ft/video/upload/v1759675772/Java_in_100_Seconds_cr6wur.mp4';
 const tempDir = path.join(__dirname, '..', 'temp');
 
 if (!fs.existsSync(tempDir)) {
