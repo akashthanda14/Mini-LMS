@@ -15,6 +15,7 @@ import {
   updateProfile,
   updateProfileCompletion
 } from '../services/userService.js';
+import { verifyUserEmail } from '../services/userService.js';
 import {
   storeEmailOTP,
   verifyEmailOtpService,
@@ -178,11 +179,8 @@ export const verifyEmailOtp = async (req, res) => {
       });
     }
 
-    // Mark email as verified
-    await prisma.user.update({
-      where: { id: user.id },
-      data: { emailVerified: true }
-    });
+    // Mark email as verified using service
+    await verifyUserEmail(user.id);
 
     // Check if profile is complete
     if (user.isProfileComplete && user.name && user.password) {
@@ -272,10 +270,17 @@ export const verifyPhoneOtp = async (req, res) => {
     // Check if profile is complete
     if (user.isProfileComplete && user.name && user.password) {
       // User already has profile - login directly
+      // Create a standard auth token
+      const token = createAuthToken({
+        userId: user.id,
+        email: user.email || user.phoneNumber,
+        role: user.role
+      });
+
       return res.status(200).json({
         success: true,
         message: 'Phone verified successfully.',
-        token: issueJwt(user.id),
+        token,
         user: {
           id: user.id,
           phoneNumber: user.phoneNumber,
@@ -356,7 +361,7 @@ export const completeProfile = async (req, res) => {
       const existingUsername = await prisma.user.findFirst({
         where: {
           username: username.trim().toLowerCase(),
-          NOT: { id: userId },
+          AND: { id: { not: userId } },
         },
       });
 
@@ -368,50 +373,21 @@ export const completeProfile = async (req, res) => {
       }
     }
 
-    // Hash password
-    const saltRounds = 12;
-    const hashedPassword = await bcrypt.hash(password.trim(), saltRounds);
-
-    // Build update data
-    const updateData = {
-      name: name.trim(),
-      password: hashedPassword,
-      isProfileComplete: true,
-      updatedAt: new Date(),
-    };
-
-    // Add optional fields if provided
-    if (username) updateData.username = username.trim().toLowerCase();
-    if (fullName) updateData.fullName = fullName.trim();
-    if (country) updateData.country = country.trim();
-    if (state) updateData.state = state.trim();
-    if (zip) updateData.zip = zip.trim();
-
-    const updatedUser = await prisma.user.update({
-      where: { id: userId },
-      data: updateData,
-      select: {
-        id: true,
-        name: true,
-        username: true,
-        fullName: true,
-        email: true,
-        phoneNumber: true,
-        emailVerified: true,
-        phoneVerified: true,
-        isProfileComplete: true,
-        country: true,
-        state: true,
-        zip: true,
-        role: true,
-        createdAt: true,
-        updatedAt: true,
-      },
+    // Delegate update and password hashing to the service
+    const updatedUser = await updateProfileCompletion(userId, {
+      name,
+      email: undefined,
+      password,
+      username,
+      fullName,
+      country,
+      state,
+      zip,
     });
 
     console.log('Profile completed for user:', userId);
 
-    // Create JWT with userId, email, and role
+    // Create JWT with userId, email/phone, and role
     const token = createAuthToken({
       userId: updatedUser.id,
       email: updatedUser.email || updatedUser.phoneNumber,

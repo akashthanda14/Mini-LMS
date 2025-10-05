@@ -74,10 +74,7 @@ export const getUploadCredentials = async (req, res) => {
         apiKey: credentials.api_key,
         publicId: credentials.public_id,
         cloudName: credentials.cloud_name,
-        folder: credentials.folder,
-        resourceType: credentials.resource_type,
-        eager: credentials.eager,
-        eagerAsync: credentials.eager_async
+        folder: credentials.folder
       }
     });
   } catch (error) {
@@ -209,6 +206,56 @@ export const getCourseLessons = async (req, res) => {
       error: error.message,
       courseId: req.params.courseId 
     });
+
+    return res.status(500).json({
+      success: false,
+      message: 'Internal server error'
+    });
+  }
+};
+
+/**
+ * Get single lesson details
+ * GET /lessons/:id
+ */
+export const getLessonDetails = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // Get lesson with course details
+    const lesson = await getLessonById(id);
+
+    if (!lesson) {
+      return res.status(404).json({
+        success: false,
+        message: 'Lesson not found'
+      });
+    }
+
+    // Check access permissions (reuse existing helper)
+    if (!canAccessLessons(lesson.course, req.user)) {
+      return res.status(403).json({
+        success: false,
+        message: 'Access denied. Course is not published yet.'
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      data: lesson
+    });
+  } catch (error) {
+    logger.error('Get lesson details error', {
+      lessonId: req.params.id,
+      error: error.message
+    });
+
+    if (error.message === 'Lesson not found') {
+      return res.status(404).json({
+        success: false,
+        message: 'Lesson not found'
+      });
+    }
 
     return res.status(500).json({
       success: false,
