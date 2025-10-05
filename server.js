@@ -35,8 +35,10 @@ const app = express();
 // ================================
 
 // CORS Configuration
+// Allow requests from any origin. Using `origin: true` reflects the request origin
+// which works with `credentials: true` (unlike a wildcard '*').
 const corsOptions = {
-  origin: process.env.CORS_ORIGIN?.split(',') || ['http://localhost:3000', 'http://localhost:5173'],
+  origin: true,
   credentials: true,
   optionsSuccessStatus: 200,
 };
