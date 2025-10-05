@@ -15,7 +15,6 @@ import userAuthRoutes from './routes/userRoutes.js';
 import authRoutes from './routes/authRoutes.js';
 import creatorRoutes from './routes/creatorRoutes.js';
 import adminApplicationRoutes from './routes/adminApplicationRoutes.js';
-import adminMetricsRoutes from './routes/adminMetricsRoutes.js';
 import courseRoutes from './routes/courseRoutes.js';
 import adminCourseRoutes from './routes/adminCourseRoutes.js';
 import lessonRoutes from './routes/lessonRoutes.js';
@@ -145,7 +144,18 @@ app.use('/api/creator', creatorRoutes);
 app.use('/api/admin/applications', adminApplicationRoutes);
 
 // Admin metrics and analytics routes
-app.use('/api/admin/metrics', adminMetricsRoutes);
+// Load admin metrics routes dynamically so missing files don't crash the server in some deploys
+try {
+  // top-level await is supported in Node 18+; dynamic import will throw if file missing
+  const imported = await import('./routes/adminMetricsRoutes.js').catch(() => null);
+  if (imported && imported.default) {
+    app.use('/api/admin/metrics', imported.default);
+  } else {
+    logger.warn('Admin metrics routes not found, skipping mount');
+  }
+} catch (err) {
+  logger.warn('Failed to load admin metrics routes, continuing without them', { error: err.message });
+}
 
 // Course routes
 app.use('/api/courses', courseRoutes);
