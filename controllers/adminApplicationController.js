@@ -86,22 +86,26 @@ export const getPendingApplications = async (req, res) => {
         id: app.id,
         status: app.status,
         createdAt: app.createdAt,
+        reviewedAt: app.reviewedAt || null,
+        rejectionReason: app.rejectionReason || null,
         applicant: {
           id: app.user.id,
           name: app.user.name,
           username: app.user.username,
           email: app.user.email,
+          role: app.user.role
         },
         bio: app.bio,
         portfolio: app.portfolio,
         experience: app.experience,
+        reviewer: app.reviewer || null
       })),
     });
   } catch (error) {
     console.error('Get pending applications error:', error);
     return res.status(500).json({
       success: false,
-      message: 'Internal server error.',
+      message: 'Failed to retrieve pending applications.',
     });
   }
 };

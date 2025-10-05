@@ -1,6 +1,7 @@
 // controllers/adminCourseController.js
 // Controller for admin course review operations
 
+import prisma from '../lib/prisma.js';
 import {
   getCourses,
   getCourseById,
@@ -76,7 +77,31 @@ export const getCoursesForReview = async (req, res) => {
  */
 export const getPendingCourses = async (req, res) => {
   try {
-    const courses = await getCourses({ status: 'PENDING' });
+    const courses = await prisma.course.findMany({
+      where: { status: 'PENDING' },
+      include: {
+        creator: {
+          select: {
+            id: true,
+            name: true,
+            email: true
+          }
+        },
+        lessons: {
+          select: {
+            id: true,
+            title: true,
+            order: true,
+            videoUrl: true
+          },
+          orderBy: { order: 'asc' }
+        },
+        _count: {
+          select: { lessons: true }
+        }
+      },
+      orderBy: { submittedAt: 'desc' }
+    });
 
     return res.status(200).json({
       success: true,
@@ -85,18 +110,21 @@ export const getPendingCourses = async (req, res) => {
         id: course.id,
         title: course.title,
         description: course.description,
-        thumbnail: course.thumbnail,
-        category: course.category,
-        level: course.level,
+        thumbnailUrl: course.thumbnail,
         status: course.status,
+        createdAt: course.createdAt,
+        updatedAt: course.updatedAt,
         submittedAt: course.submittedAt,
+        reviewedAt: course.reviewedAt || null,
+        rejectionFeedback: course.rejectionFeedback || null,
+        lessonCount: course._count.lessons,
         creator: {
           id: course.creator.id,
           name: course.creator.name,
-          email: course.creator.email,
+          email: course.creator.email
         },
-        lessonCount: course._count.lessons,
-      })),
+        lessons: course.lessons
+      }))
     });
   } catch (error) {
     console.error('Get pending courses error:', error);
