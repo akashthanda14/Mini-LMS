@@ -44,7 +44,7 @@ export const createNewCourse = async (req, res) => {
     }
 
     // Create course
-    const course = await createCourse(creatorId, sanitizedData);
+    const course = await createCourseService(creatorId, sanitizedData);
 
     return res.status(201).json({
       success: true,
