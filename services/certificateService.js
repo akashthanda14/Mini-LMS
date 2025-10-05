@@ -347,14 +347,23 @@ export const generateCertificatePDF = async (certificateId) => {
  * @param {string} userId - User ID
  * @returns {Promise<Array>} List of certificates
  */
-export const getUserCertificates = async (userId) => {
+export const getUserCertificates = async (userId, page = 1, limit = 10) => {
   try {
+    const maxLimit = 100;
+    const take = Math.min(limit || 10, maxLimit);
+    const skip = (Math.max(page || 1, 1) - 1) * take;
+
+    const where = {
+      enrollment: {
+        userId
+      }
+    };
+
+    // total count for pagination
+    const total = await prisma.certificate.count({ where });
+
     const certificates = await prisma.certificate.findMany({
-      where: {
-        enrollment: {
-          userId
-        }
-      },
+      where,
       include: {
         enrollment: {
           include: {
@@ -372,10 +381,12 @@ export const getUserCertificates = async (userId) => {
       },
       orderBy: {
         issuedAt: 'desc'
-      }
+      },
+      skip,
+      take
     });
 
-    return certificates;
+    return { certificates, total };
   } catch (error) {
     logger.error('Error getting user certificates', {
       userId,
