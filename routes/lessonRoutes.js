@@ -3,6 +3,7 @@ import {
   getUploadCredentials,
   createNewLesson,
   getCourseLessons,
+  getLessonDetails,
   updateExistingLesson,
   deleteExistingLesson,
   getTranscriptStatus
@@ -68,6 +69,14 @@ router.get(
   ensureAuth,
   validateUUID('id'),
   getTranscriptStatus
+);
+
+// Get single lesson details (Authenticated users)
+router.get(
+  '/lessons/:id',
+  ensureAuth,
+  validateUUID('id'),
+  getLessonDetails
 );
 
 export default router;
