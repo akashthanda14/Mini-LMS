@@ -35,11 +35,15 @@ import {
  */
 export const registerUser = async (req, res) => {
   try {
-    const { email, phoneNumber } = req.body;
+  const { email, phoneNumber } = req.body;
+  const perfStart = Date.now();
+  const perf = {};
 
     /* --------------------------- email flow --------------------------- */
     if (email) {
+      const t0 = Date.now();
       const existing = await findUserByEmail(email);
+      perf.findUserByEmail = Date.now() - t0;
       if (existing) {
         if (existing.emailVerified) {
           return res.status(409).json({
@@ -49,12 +53,14 @@ export const registerUser = async (req, res) => {
         }
 
         /* resend verification email */
-        const token = await createEmailVerificationToken(existing.id);
-        const otp = String(Math.floor(100000 + Math.random() * 900000));
-        await storeEmailOTP(existing.id, otp);
+  const otp = String(Math.floor(100000 + Math.random() * 900000));
+  const t1 = Date.now();
+  await storeEmailOTP(existing.id, otp);
+  perf.storeEmailOTP_existing = Date.now() - t1;
 
-        await sendVerificationEmail(existing.email, token, otp, 'User')
-          .catch(err => console.error('Email failed:', err));
+        // Fire-and-forget: send OTP-only email (no token/link)
+        sendVerificationEmail(existing.email, otp, 'User')
+          .catch(err => console.error('Email resend failed:', err));
 
         return res.status(200).json({
           success: true,
@@ -66,19 +72,25 @@ export const registerUser = async (req, res) => {
       }
 
       /* create new user */
-      const user = await createUser({
+  const t2 = Date.now();
+  const user = await createUser({
         email: email.toLowerCase().trim(),
         emailVerified: false,
         phoneVerified: false,
         isProfileComplete: false,
       });
+  perf.createUser = Date.now() - t2;
 
-      const token = await createEmailVerificationToken(user.id);
-      const otp = String(Math.floor(100000 + Math.random() * 900000));
-      await storeEmailOTP(user.id, otp);
+  const otp = String(Math.floor(100000 + Math.random() * 900000));
+  const t3 = Date.now();
+  await storeEmailOTP(user.id, otp);
+  perf.storeEmailOTP_new = Date.now() - t3;
 
-      await sendVerificationEmail(user.email, token, otp, 'User')
-        .catch(err => console.error('Email failed:', err));
+      // Fire-and-forget: send OTP-only email (no token/link)
+      sendVerificationEmail(user.email, otp, 'User')
+        .catch(err => console.error('Email send failed:', err));
+
+      perf.total = Date.now() - perfStart;
 
       return res.status(201).json({
         success: true,
@@ -87,54 +99,10 @@ export const registerUser = async (req, res) => {
         verificationType: 'email',
         contactInfo: user.email,
         requiresProfileCompletion: true,
+        perfTimings: perf,
       });
     } else if (phoneNumber) {
       /* --------------------------- phone flow --------------------------- */
-      const phone = phoneNumber.trim();
-
-      const existingPhone = await findUserByPhone(phone);
-      if (existingPhone) {
-        if (existingPhone.phoneVerified) {
-          return res.status(409).json({
-            success: false,
-            message: 'Phone number already registered. Log in instead.',
-          });
-        }
-
-        /* resend OTP */
-        const otp = String(Math.floor(100000 + Math.random() * 900000));
-        await storePhoneOTP(existingPhone.id, otp);
-        await sendOTP(existingPhone.phoneNumber, otp);
-
-        return res.status(200).json({
-          success: true,
-          message: 'OTP resent to your phone.',
-          userId: existingPhone.id,
-          verificationType: 'phone',
-          requiresProfileCompletion: !existingPhone.isProfileComplete,
-        });
-      }
-
-      /* create new phone user */
-      const user = await createUser({
-        phoneNumber: phone,
-        emailVerified: false,
-        phoneVerified: false,
-        isProfileComplete: false,
-      });
-
-      const otp = String(Math.floor(100000 + Math.random() * 900000));
-      await storePhoneOTP(user.id, otp);
-      await sendOTP(user.phoneNumber, otp);
-
-      return res.status(201).json({
-        success: true,
-        message: 'Registration successful. Check your phone for OTP verification.',
-        userId: user.id,
-        verificationType: 'phone',
-        contactInfo: user.phoneNumber,
-        requiresProfileCompletion: true,
-      });
     } else {
       return res.status(400).json({
         success: false,
@@ -148,6 +116,7 @@ export const registerUser = async (req, res) => {
     });
   }
 };
+    // Phone registration/OTP logic removed. Only email registration/OTP is supported.
 
 /**
  * VERIFY EMAIL OTP

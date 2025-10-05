@@ -52,7 +52,6 @@ export {
 export {
   createAuthToken,
   verifyAuthToken,
-  createEmailVerificationToken,
   verifyEmailVerificationToken,
   createPasswordResetToken,
   verifyPasswordResetToken,

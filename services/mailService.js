@@ -89,7 +89,7 @@ export const sendOTPEmail = async (email, otp, purpose = 'verification') => {
 /**
  * Send verification email with link and OTP
  */
-export const sendVerificationEmail = async (email, verificationLink, otp = null, userName = 'User') => {
+export const sendVerificationEmail = async (email, otp = null, userName = 'User') => {
   try {
     const emailUser = process.env.SMTP_USER || process.env.EMAIL_USER;
     const emailPass = process.env.SMTP_PASS || process.env.EMAIL_PASSWORD;
@@ -106,47 +106,35 @@ export const sendVerificationEmail = async (email, verificationLink, otp = null,
     const mailOptions = {
       from: process.env.SMTP_FROM || process.env.EMAIL_FROM || emailUser,
       to: email,
-      subject: 'Verify Your Email Address - LMS',
+      subject: 'Your verification code - LMS',
       html: `
-        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #f9f9f9;">
-          <div style="background-color: white; padding: 30px; border-radius: 10px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
-            <h2 style="color: #333; margin-bottom: 20px;">Verify Your Email Address</h2>
-            <p style="font-size: 16px; color: #666; line-height: 1.5;">
-              Hello ${userName},<br><br>
-              Thank you for registering! Please verify your email address to complete your registration.
-            </p>
-            
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+          <div style="background-color: white; padding: 30px; border-radius: 10px; box-shadow: 0 2px 4px rgba(0,0,0,0.05);">
+            <h2 style="color: #333; margin-bottom: 10px;">Hello ${userName},</h2>
+            <p style="font-size: 15px; color: #666;">Use the following one-time code to verify your email address:</p>
             ${otp ? `
-            <div style="background-color: #f4f4f4; padding: 20px; text-align: center; border-radius: 5px; margin: 25px 0;">
-              <p style="font-size: 14px; color: #666; margin-bottom: 10px;">Your verification code is:</p>
-              <h1 style="color: #4CAF50; font-size: 36px; margin: 10px 0; letter-spacing: 8px; font-weight: bold;">${otp}</h1>
-              <p style="font-size: 12px; color: #999; margin-top: 10px;">This code will expire in ${process.env.OTP_EXPIRY_MINUTES || 10} minutes</p>
+            <div style="background-color: #f7fafc; padding: 18px; text-align: center; border-radius: 8px; margin: 20px 0;">
+              <h1 style="color: #111827; font-size: 34px; margin: 0; letter-spacing: 6px; font-weight: 700;">${otp}</h1>
+              <p style="font-size: 12px; color: #9ca3af; margin-top: 8px;">Expires in ${process.env.OTP_EXPIRY_MINUTES || 10} minutes</p>
             </div>
             ` : ''}
-            
-            <div style="text-align: center; margin: 30px 0;">
-              <a href="${verificationLink}" style="background-color: #4CAF50; color: white; padding: 14px 40px; text-decoration: none; border-radius: 5px; font-size: 16px; display: inline-block; font-weight: bold;">Verify Email</a>
-            </div>
-            
-            <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee;">
-              <p style="font-size: 12px; color: #999; margin-bottom: 5px;">Or copy and paste this link into your browser:</p>
-              <p style="font-size: 11px; color: #666; word-break: break-all; background-color: #f4f4f4; padding: 10px; border-radius: 3px;">${verificationLink}</p>
-            </div>
-            
-            <p style="font-size: 13px; color: #999; margin-top: 20px; line-height: 1.5;">
-              This verification link will expire in 24 hours.<br>
-              If you didn't create an account, please ignore this email.
-            </p>
+            <p style="font-size: 13px; color: #777; margin-top: 10px;">If you didn't request this, please ignore this message.</p>
           </div>
-          
-          <div style="text-align: center; margin-top: 20px; color: #999; font-size: 12px;">
-            <p>© ${new Date().getFullYear()} LMS. All rights reserved.</p>
+          <div style="text-align: center; margin-top: 18px; color: #9ca3af; font-size: 12px;">
+            <p>© ${new Date().getFullYear()} LMS</p>
           </div>
         </div>
       `,
     };
 
-    await transport.sendMail(mailOptions);
+    // ADD TIMEOUT: Max 3 seconds for email send in production
+    const timeoutMs = process.env.NODE_ENV === 'production' ? 3000 : 10000;
+    const sendPromise = transport.sendMail(mailOptions);
+    const timeoutPromise = new Promise((_, reject) => 
+      setTimeout(() => reject(new Error(`Email timeout after ${timeoutMs}ms`)), timeoutMs)
+    );
+
+    await Promise.race([sendPromise, timeoutPromise]);
     console.log(`✅ Verification email sent successfully to ${email}`);
     return { success: true };
   } catch (error) {

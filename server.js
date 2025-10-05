@@ -106,28 +106,91 @@ app.get('/', (req, res) => {
 
 // Health check endpoint
 app.get('/health', async (req, res) => {
+  const startTime = Date.now();
+  
   try {
-    // Check database connection
-    await prisma.$queryRaw`SELECT 1`;
+    // Test database connection with timeout
+    const dbTestPromise = prisma.$queryRaw`SELECT 1 as test, current_database() as db_name, current_user as db_user`;
+    const timeoutPromise = new Promise((_, reject) => 
+      setTimeout(() => reject(new Error('Database connection timeout')), 5000)
+    );
     
-    logger.debug('Health check: OK');
+    const dbResult = await Promise.race([dbTestPromise, timeoutPromise]);
+    
+    const responseTime = Date.now() - startTime;
+    
+    logger.debug('Health check: OK', { responseTime });
     
     res.json({
       status: 'OK',
       message: 'Server is running',
       timestamp: new Date().toISOString(),
-      database: 'Connected',
+      responseTime: `${responseTime}ms`,
+      database: {
+        status: 'Connected',
+        name: dbResult[0].db_name,
+        user: dbResult[0].db_user,
+        provider: 'PostgreSQL (Neon)'
+      },
       environment: process.env.NODE_ENV || 'development',
+      uptime: process.uptime(),
+      memory: process.memoryUsage(),
     });
   } catch (error) {
-    logger.error('Health check failed:', { error: error.message });
+    const responseTime = Date.now() - startTime;
+    
+    logger.error('Health check failed:', { 
+      error: error.message, 
+      code: error.code,
+      responseTime 
+    });
+    
+    // Determine error type
+    let errorType = 'Unknown';
+    let suggestions = [];
+    
+    if (error.message.includes('timeout')) {
+      errorType = 'Connection Timeout';
+      suggestions = [
+        'Check network connectivity',
+        'Verify DATABASE_URL is correct',
+        'Check Neon dashboard for maintenance'
+      ];
+    } else if (error.message.includes('Closed')) {
+      errorType = 'Connection Closed';
+      suggestions = [
+        'Database connection was closed unexpectedly',
+        'This is normal for hosted databases like Neon',
+        'Connection will be retried automatically'
+      ];
+    } else if (error.message.includes('authentication')) {
+      errorType = 'Authentication Failed';
+      suggestions = [
+        'Check DATABASE_URL credentials',
+        'Verify database user permissions'
+      ];
+    } else if (error.message.includes('connect')) {
+      errorType = 'Connection Failed';
+      suggestions = [
+        'Check DATABASE_URL format',
+        'Verify Neon project is active',
+        'Check firewall settings'
+      ];
+    }
     
     res.status(503).json({
       status: 'ERROR',
       message: 'Service unavailable',
       timestamp: new Date().toISOString(),
-      database: 'Disconnected',
-      error: error.message,
+      responseTime: `${responseTime}ms`,
+      database: {
+        status: 'Disconnected',
+        error: error.message,
+        errorType,
+        suggestions
+      },
+      environment: process.env.NODE_ENV || 'development',
+      uptime: process.uptime(),
     });
   }
 });
