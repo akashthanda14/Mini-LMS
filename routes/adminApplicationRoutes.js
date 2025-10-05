@@ -4,6 +4,7 @@
 import express from 'express';
 import { ensureAuth } from '../middleware/authMiddleware.js';
 import { requireAdmin } from '../middleware/rbacMiddleware.js';
+import { validateUUID } from '../middleware/validationMiddleware.js';
 import {
   getAllCreatorApplications,
   getPendingApplications,
@@ -34,20 +35,20 @@ router.get('/pending', ensureAuth, requireAdmin, getPendingApplications);
  * @desc    Get a single application by ID
  * @access  Private - ADMIN only
  */
-router.get('/:id', ensureAuth, requireAdmin, getApplicationById);
+router.get('/:id', ensureAuth, requireAdmin, validateUUID('id'), getApplicationById);
 
 /**
  * @route   POST /api/admin/applications/:id/approve
  * @desc    Approve a creator application
  * @access  Private - ADMIN only
  */
-router.post('/:id/approve', ensureAuth, requireAdmin, approveCreatorApplication);
+router.post('/:id/approve', ensureAuth, requireAdmin, validateUUID('id'), approveCreatorApplication);
 
 /**
  * @route   POST /api/admin/applications/:id/reject
  * @desc    Reject a creator application with reason
  * @access  Private - ADMIN only
  */
-router.post('/:id/reject', ensureAuth, requireAdmin, rejectCreatorApplication);
+router.post('/:id/reject', ensureAuth, requireAdmin, validateUUID('id'), rejectCreatorApplication);
 
 export default router;

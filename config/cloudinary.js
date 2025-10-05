@@ -54,6 +54,45 @@ export const generateUploadSignature = (publicId, folder = 'course-videos') => {
 };
 
 /**
+ * Generate signed upload parameters for images (thumbnails)
+ * @param {string} publicId
+ * @param {string} folder
+ * @returns {object}
+ */
+export const generateImageUploadSignature = (publicId, folder = 'course-thumbnails') => {
+  try {
+    const timestamp = Math.round(Date.now() / 1000);
+
+    const params = {
+      timestamp,
+      public_id: publicId,
+      folder,
+      resource_type: 'image'
+    };
+
+    const signature = cloudinary.utils.api_sign_request(
+      params,
+      process.env.CLOUDINARY_API_SECRET
+    );
+
+    logger.info('Generated Cloudinary image upload signature', { publicId, folder });
+
+    return {
+      signature,
+      timestamp,
+      public_id: publicId,
+      folder,
+      api_key: process.env.CLOUDINARY_API_KEY,
+      cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+      resource_type: 'image'
+    };
+  } catch (error) {
+    logger.error('Error generating Cloudinary image signature', { error: error.message });
+    throw new Error('Failed to generate image upload credentials');
+  }
+};
+
+/**
  * Delete a video from Cloudinary
  * @param {string} publicId - The public ID of the video to delete
  * @returns {Promise<object>} Deletion result

@@ -4,6 +4,7 @@
 import express from 'express';
 import { ensureAuth } from '../middleware/authMiddleware.js';
 import { requireAdmin } from '../middleware/rbacMiddleware.js';
+import { validateUUID } from '../middleware/validationMiddleware.js';
 import {
   getCoursesForReview,
   getPendingCourses,
@@ -34,20 +35,20 @@ router.get('/pending', ensureAuth, requireAdmin, getPendingCourses);
  * @desc    Get detailed course information for review
  * @access  Private - ADMIN only
  */
-router.get('/:id', ensureAuth, requireAdmin, getCourseForReview);
+router.get('/:id', ensureAuth, requireAdmin, validateUUID('id'), getCourseForReview);
 
 /**
  * @route   POST /api/admin/courses/:id/publish
  * @desc    Publish a course (PENDING → PUBLISHED)
  * @access  Private - ADMIN only
  */
-router.post('/:id/publish', ensureAuth, requireAdmin, publishCourseByCourseId);
+router.post('/:id/publish', ensureAuth, requireAdmin, validateUUID('id'), publishCourseByCourseId);
 
 /**
  * @route   POST /api/admin/courses/:id/reject
  * @desc    Reject a course with feedback (PENDING → REJECTED)
  * @access  Private - ADMIN only
  */
-router.post('/:id/reject', ensureAuth, requireAdmin, rejectCourseByCourseId);
+router.post('/:id/reject', ensureAuth, requireAdmin, validateUUID('id'), rejectCourseByCourseId);
 
 export default router;

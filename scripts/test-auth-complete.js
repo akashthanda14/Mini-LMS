@@ -92,7 +92,7 @@ const tests = {
     testData.otp = otp;
 
     try {
-      const response = await axios.post(`${BASE_URL}/user-auth/verify-email-otp`, {
+  const response = await axios.post(`${BASE_URL}/user-auth/verify-email`, {
         email: TEST_EMAIL,
         otp: otp,
       });

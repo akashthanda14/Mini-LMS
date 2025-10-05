@@ -37,11 +37,13 @@ router.post('/register', registerUser);
 // Send OTP (alias for register for frontend compatibility)
 router.post('/send-otp', registerUser);
 
-// Verify Email OTP
-router.post('/verify-email-otp', verifyEmailOtp);
+// Verify Email
+// kept handler name verifyEmailOtp for backward compatibility
+router.post('/verify-email', verifyEmailOtp);
 
-// Verify Phone OTP
-router.post('/verify-phone-otp', verifyPhoneOtp);
+// Verify Phone
+// kept handler name verifyPhoneOtp for backward compatibility
+router.post('/verify-phone', verifyPhoneOtp);
 
 // Unified OTP verification endpoint - handles both email and phone verification
 router.post('/verify-otp', async (req, res) => {
@@ -119,7 +121,7 @@ router.post('/verify-phone-change', ensureAuth, verifyPhoneChange);
 
 // Check authentication status
 router.get(
-  '/auth/status',
+  '/status',
   ensureAuth,
   async (req, res) => {
     try {
@@ -159,7 +161,7 @@ router.get(
 );
 
 // Resend OTP - unified endpoint
-router.post('/auth/resend-otp', async (req, res) => {
+router.post('/resend-otp', async (req, res) => {
   try {
     const { email, phoneNumber } = req.body;
 

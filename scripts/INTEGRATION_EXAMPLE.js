@@ -90,8 +90,8 @@ Available endpoints after integration:
 
 USER AUTHENTICATION:
   POST /api/user-auth/register           - Register with email or phone
-  POST /api/user-auth/verify-email-otp   - Verify email OTP
-  POST /api/user-auth/verify-phone-otp   - Verify phone OTP
+  POST /api/user-auth/verify-email       - Verify email OTP
+  POST /api/user-auth/verify-phone       - Verify phone OTP
   POST /api/user-auth/complete-profile   - Complete user profile
   POST /api/user-auth/login              - Login with credentials
   POST /api/user-auth/forgot-password    - Request password reset
@@ -102,7 +102,7 @@ PROFILE MANAGEMENT (Protected):
   POST /api/user-auth/verify-email-change    - Verify email change
   POST /api/user-auth/request-phone-change   - Request phone change
   POST /api/user-auth/verify-phone-change    - Verify phone change
-  GET  /api/user-auth/auth/status            - Get auth status
+  GET  /api/user-auth/status            - Get auth status
 
 ADMIN:
   POST /api/admin-auth/login             - Admin login
@@ -125,7 +125,7 @@ fetch('http://localhost:3000/api/user-auth/register', {
 });
 
 // Example 2: Verify Email OTP
-fetch('http://localhost:3000/api/user-auth/verify-email-otp', {
+fetch('http://localhost:3000/api/user-auth/verify-email', {
   method: 'POST',
   headers: { 'Content-Type': 'application/json' },
   body: JSON.stringify({

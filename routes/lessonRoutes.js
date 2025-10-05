@@ -9,6 +9,7 @@ import {
 } from '../controllers/lessonController.js';
 import { ensureAuth } from '../middleware/authMiddleware.js';
 import { requireCreator } from '../middleware/rbacMiddleware.js';
+import { validateUUID } from '../middleware/validationMiddleware.js';
 
 const router = express.Router();
 
@@ -22,6 +23,7 @@ router.post(
   '/courses/:courseId/lessons/upload',
   ensureAuth,
   requireCreator,
+  validateUUID('courseId'),
   getUploadCredentials
 );
 
@@ -30,6 +32,7 @@ router.post(
   '/courses/:courseId/lessons',
   ensureAuth,
   requireCreator,
+  validateUUID('courseId'),
   createNewLesson
 );
 
@@ -37,6 +40,7 @@ router.post(
 router.get(
   '/courses/:courseId/lessons',
   ensureAuth,
+  validateUUID('courseId'),
   getCourseLessons
 );
 
@@ -45,6 +49,7 @@ router.patch(
   '/lessons/:id',
   ensureAuth,
   requireCreator,
+  validateUUID('id'),
   updateExistingLesson
 );
 
@@ -53,6 +58,7 @@ router.delete(
   '/lessons/:id',
   ensureAuth,
   requireCreator,
+  validateUUID('id'),
   deleteExistingLesson
 );
 
@@ -60,6 +66,7 @@ router.delete(
 router.get(
   '/lessons/:id/transcript-status',
   ensureAuth,
+  validateUUID('id'),
   getTranscriptStatus
 );
 

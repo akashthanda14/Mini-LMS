@@ -8,6 +8,7 @@ import {
 } from '../controllers/enrollmentController.js';
 import { ensureAuth } from '../middleware/authMiddleware.js';
 import { requireLearner } from '../middleware/rbacMiddleware.js';
+import { validateUUID } from '../middleware/validationMiddleware.js';
 
 const router = express.Router();
 
@@ -21,6 +22,7 @@ router.post(
   '/courses/:id/enroll',
   ensureAuth,
   requireLearner,
+  validateUUID('id'),
   enrollUserInCourse
 );
 
@@ -35,6 +37,7 @@ router.get(
 router.get(
   '/courses/:id/progress',
   ensureAuth,
+  validateUUID('id'),
   getCourseProgressDetails
 );
 
@@ -42,6 +45,7 @@ router.get(
 router.get(
   '/courses/:id/enrollment',
   ensureAuth,
+  validateUUID('id'),
   getEnrollmentStatus
 );
 
@@ -50,6 +54,7 @@ router.post(
   '/lessons/:id/complete',
   ensureAuth,
   requireLearner,
+  validateUUID('id'),
   completeLessonForUser
 );
 
