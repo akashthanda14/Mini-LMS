@@ -58,8 +58,9 @@ export const registerUser = async (req, res) => {
   await storeEmailOTP(existing.id, otp);
   perf.storeEmailOTP_existing = Date.now() - t1;
 
-        // Fire-and-forget: send OTP-only email (no token/link)
-        sendVerificationEmail(existing.email, otp, 'User')
+        // create verification token then send (fire-and-forget)
+        const tokenExisting = await createEmailVerificationToken(existing.id);
+        sendVerificationEmail(existing.email, tokenExisting, otp, 'User')
           .catch(err => console.error('Email resend failed:', err));
 
         return res.status(200).json({
@@ -86,8 +87,9 @@ export const registerUser = async (req, res) => {
   await storeEmailOTP(user.id, otp);
   perf.storeEmailOTP_new = Date.now() - t3;
 
-      // Fire-and-forget: send OTP-only email (no token/link)
-      sendVerificationEmail(user.email, otp, 'User')
+      // create verification token then send (fire-and-forget)
+      const tokenNew = await createEmailVerificationToken(user.id);
+      sendVerificationEmail(user.email, tokenNew, otp, 'User')
         .catch(err => console.error('Email send failed:', err));
 
       perf.total = Date.now() - perfStart;

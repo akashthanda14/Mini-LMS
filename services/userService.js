@@ -3,6 +3,9 @@
 
 import prisma from '../lib/prisma.js';
 import bcrypt from 'bcryptjs';
+import jwt from 'jsonwebtoken';
+import { createEmailVerificationToken } from './tokenService.js';
+import { sendVerificationEmail } from './mailService.js';
 
 /**
  * CREATE USER
@@ -215,39 +218,42 @@ export const updateProfile = async (userId, updateData) => {
 export const updateProfileCompletion = async (userId, profileData) => {
   const { name, email, password } = profileData;
 
-  // Hash password if provided
-  let hashedPassword = null;
-  if (password) {
-    const saltRounds = 10;
-    hashedPassword = await bcrypt.hash(password, saltRounds);
-  }
-
-  // Build update data
-  const updateData = {
-    name: name?.trim(),
-    isProfileComplete: true,
-    updatedAt: new Date(),
-  };
-
-  if (email) {
-    updateData.email = email.trim().toLowerCase();
-  }
-
-  if (hashedPassword) {
-    updateData.password = hashedPassword;
-  }
-
   try {
+    const updateData = {
+      name: name.trim(),
+      phoneVerified: true,
+      isProfileComplete: true,
+    };
+
+    if (email && email.trim()) {
+      updateData.email = email.trim().toLowerCase();
+
+      const existingEmailUser = await prisma.user.findUnique({
+        where: { email: updateData.email },
+      });
+
+      if (existingEmailUser && existingEmailUser.id !== userId) {
+        throw new Error(
+          'Email address is already registered with another account'
+        );
+      }
+    }
+
+    if (password && password.trim()) {
+      const saltRounds = 12;
+      updateData.password = await bcrypt.hash(password.trim(), saltRounds);
+    }
+
     const updatedUser = await prisma.user.update({
-      where: { id: userId },
+      where: { id: userId }, // Use string userId
       data: updateData,
       select: {
         id: true,
+        phoneNumber: true,
         name: true,
         email: true,
-        phoneNumber: true,
-        emailVerified: true,
         phoneVerified: true,
+        emailVerified: true,
         isProfileComplete: true,
         role: true,
         createdAt: true,
@@ -255,12 +261,13 @@ export const updateProfileCompletion = async (userId, profileData) => {
       },
     });
 
+    console.log('Profile completed for user:', userId);
     return updatedUser;
   } catch (error) {
-    console.error('Error completing profile:', error);
+    console.error('Error updating profile completion:', error);
 
     if (error.code === 'P2002') {
-      throw new Error('Email already exists');
+      throw new Error('Email address is already registered');
     }
 
     throw error;
@@ -301,6 +308,278 @@ export const verifyUserPhone = async (userId) => {
   }
 };
 
+// --- Added: checkUserExistenceService ---
+export const checkUserExistenceService = async (emailOrPhone) => {
+  try {
+    const isPhone = /^\+?\d+$/.test(emailOrPhone.trim());
+
+    const user = isPhone
+      ? await findUserByPhone(emailOrPhone.trim())
+      : await findUserByEmail(emailOrPhone.trim().toLowerCase());
+
+    if (!user) {
+      return {
+        exists: false,
+        loginMethods: ['otp'],
+        requiresRegistration: true,
+      };
+    }
+
+    const loginMethods = ['otp'];
+    const hasVerifiedContact = isPhone ? user.phoneVerified : user.emailVerified;
+
+    if (hasVerifiedContact && user.password) {
+      loginMethods.push('password');
+    }
+
+    return {
+      exists: true,
+      loginMethods,
+      userRole: user.role,
+      isProfileComplete: user.isProfileComplete,
+      requiresRegistration: false,
+    };
+  } catch (error) {
+    console.error('Error in checkUserExistenceService:', error);
+    throw new Error('Failed to check user existence');
+  }
+};
+
+// --- Added: resendEmailVerificationService ---
+export const resendEmailVerificationService = async (email) => {
+  const cleanEmail = email.trim().toLowerCase();
+  const user = await findUserByEmail(cleanEmail);
+
+  if (!user) {
+    return { success: false, userFound: false, alreadyVerified: false };
+  }
+
+  if (user.emailVerified) {
+    return { success: false, userFound: true, alreadyVerified: true };
+  }
+
+  try {
+    await prisma.$transaction(async (tx) => {
+      await tx.emailVerificationToken.deleteMany({
+        where: { userId: user.id },
+      });
+
+      const newToken = await createEmailVerificationToken(user.id);
+      await sendVerificationEmail(user.email, newToken, null, user.name || 'User');
+    });
+
+    return { success: true, userFound: true, alreadyVerified: false };
+  } catch (error) {
+    console.error('Error in resendEmailVerificationService:', error);
+    throw error;
+  }
+};
+
+// --- Added: determineAuthFlow ---
+export const determineAuthFlow = async (phoneNumber) => {
+  const cleanPhone = phoneNumber.trim();
+
+  try {
+    const user = await findUserByPhone(cleanPhone);
+
+    if (!user) {
+      return { flowType: 'signup', user: null };
+    } else if (user.phoneVerified && user.isProfileComplete) {
+      return { flowType: 'signin', user };
+    } else {
+      return { flowType: 'signup', user };
+    }
+  } catch (error) {
+    console.error('Error determining auth flow:', error);
+    throw new Error('Failed to determine authentication flow');
+  }
+};
+
+// --- Added: findOrCreateUser ---
+export const findOrCreateUser = async (phoneNumber) => {
+  const cleanPhone = phoneNumber.trim();
+
+  try {
+    let user = await findUserByPhone(cleanPhone);
+
+    if (!user) {
+      user = await createUser({
+        phoneNumber: cleanPhone,
+      });
+
+      console.log('Created new user for phone:', cleanPhone, 'with ID:', user.id);
+    }
+
+    return user;
+  } catch (error) {
+    console.error('Error in findOrCreateUser:', error);
+
+    if (error.code === 'P2002') {
+      throw new Error('Phone number already exists with another account');
+    }
+
+    throw new Error('Failed to create or find user');
+  }
+};
+
+// --- Added: getUserAuthStatus ---
+export const getUserAuthStatus = async (userId) => {
+  try {
+    if (!userId) {
+      throw new Error('User ID is required');
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        phoneNumber: true,
+        role: true,
+        isActive: true,
+        emailVerified: true,
+        phoneVerified: true,
+        isProfileComplete: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+    });
+
+    if (!user) {
+      throw new Error('User not found');
+    }
+
+    return {
+      ...user,
+      isLocked: false,
+      lockedUntil: null,
+    };
+  } catch (error) {
+    console.error('Error getting user auth status:', error);
+    throw error;
+  }
+};
+
+// --- Added: sendEmailVerification (helper) ---
+export const sendEmailVerification = async (userId, email, userName, otp = null) => {
+  const token = await createEmailVerificationToken(userId);
+  await sendVerificationEmail(email, token, otp, userName || 'User');
+  return { success: true };
+};
+
+// --- Added: cleanupExpiredTokens ---
+export const cleanupExpiredTokens = async () => {
+  try {
+    const result = await prisma.emailVerificationToken.deleteMany({
+      where: {
+        expiresAt: {
+          lt: new Date(),
+        },
+      },
+    });
+    return { success: true, deletedCount: result.count };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+};
+
+// --- Added: verifyUserEmailToken (verifies token, marks user, returns JWT) ---
+export const verifyUserEmailToken = async (token) => {
+  try {
+    const verificationToken = await prisma.emailVerificationToken.findUnique({
+      where: { token },
+      include: {
+        user: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            emailVerified: true,
+            phoneVerified: true,
+            isProfileComplete: true,
+            role: true,
+          },
+        },
+      },
+    });
+
+    if (!verificationToken) {
+      return {
+        success: false,
+        error: 'TOKEN_NOT_FOUND',
+      };
+    }
+
+    if (verificationToken.expiresAt < new Date()) {
+      return {
+        success: false,
+        error: 'TOKEN_EXPIRED',
+      };
+    }
+
+    if (verificationToken.usedAt) {
+      return {
+        success: false,
+        error: 'TOKEN_ALREADY_USED',
+      };
+    }
+
+    const result = await prisma.$transaction(async (tx) => {
+      const updatedUser = await tx.user.update({
+        where: { id: verificationToken.userId },
+        data: {
+          emailVerified: true,
+        },
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          phoneNumber: true,
+          emailVerified: true,
+          phoneVerified: true,
+          isProfileComplete: true,
+          role: true,
+        },
+      });
+
+      await tx.emailVerificationToken.update({
+        where: { id: verificationToken.id },
+        data: { usedAt: new Date() },
+      });
+
+      return updatedUser;
+    });
+
+    const authToken = jwt.sign(
+      {
+        userId: result.id,
+        email: result.email,
+        role: result.role,
+      },
+      process.env.JWT_SECRET,
+      { expiresIn: '7d' }
+    );
+
+    const requiresProfileCompletion = !result.isProfileComplete;
+
+    return {
+      success: true,
+      user: result,
+      authToken,
+      requiresProfileCompletion,
+      nextStep: requiresProfileCompletion ? 'profile-completion' : 'dashboard',
+    };
+  } catch (error) {
+    console.error('Database error in verifyUserEmailToken:', error);
+    return {
+      success: false,
+      error: 'DATABASE_ERROR',
+      details: error.message,
+    };
+  }
+};
+
 export default {
   createUser,
   findUserByEmail,
@@ -310,4 +589,11 @@ export default {
   updateProfileCompletion,
   verifyUserEmail,
   verifyUserPhone,
+  checkUserExistenceService,
+  resendEmailVerificationService,
+  determineAuthFlow,
+  findOrCreateUser,
+  getUserAuthStatus,
+  sendEmailVerification,
+  cleanupExpiredTokens,
 };
