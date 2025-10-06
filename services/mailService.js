@@ -17,27 +17,33 @@ if (missingEnvVars.length > 0) {
 }
 
 // --- Nodemailer Transporter Setup ---
+// Add conservative timeouts and disable pooling to avoid stale-socket ETIMEDOUTs on some hosts (e.g., Render)
 const transporter = nodemailer.createTransport({
   host: process.env.SMTP_HOST,
   port: Number(process.env.SMTP_PORT),
   secure: process.env.SMTP_PORT === '465', // true for 465, false for 587
+  pool: false,
   auth: {
     user: process.env.EMAIL_USER,
     pass: process.env.EMAIL_PASSWORD,
   },
+  // Connection timeouts (milliseconds) — configurable via env
+  connectionTimeout: Number(process.env.SMTP_CONNECTION_TIMEOUT) || 10000,
+  greetingTimeout: Number(process.env.SMTP_GREETING_TIMEOUT) || 10000,
+  socketTimeout: Number(process.env.SMTP_SOCKET_TIMEOUT) || 60000,
   tls: {
     rejectUnauthorized: false, // Avoid self-signed cert errors
   },
 });
 
-// Verify transporter configuration at startup
+// Verify transporter configuration at startup. Non-fatal: log but don't crash the process.
 (async () => {
   try {
     await transporter.verify();
     console.log('Email transporter is ready to send messages');
   } catch (error) {
-    console.error('Email transporter configuration error:', error);
-    throw new Error(`Failed to initialize email transporter: ${error.message}`);
+    console.warn('Email transporter verification warning (non-fatal):', error && error.message ? error.message : error);
+    // don't throw — allow the app to start; send attempts will retry and surface errors at runtime
   }
 })();
 
@@ -68,11 +74,29 @@ const sendEmail = async (mailOptions) => {
       throw new Error('Invalid sender address');
     }
 
-    const info = await transporter.sendMail({
-      from: `"MicroCourse LMS" <${process.env.EMAIL_USER}>`, // Ensure consistent sender
-      ...mailOptions,
-    });
-    console.log('Email sent successfully:', info.messageId);
+    // Use a small retry wrapper to handle transient network errors (ETIMEDOUT, ECONNRESET, etc.)
+    const sendWithRetry = async (opts, attempts = 3, backoffMs = 500) => {
+      let lastErr;
+      for (let i = 0; i < attempts; i++) {
+        try {
+          const info = await transporter.sendMail({ from: `"MicroCourse LMS" <${process.env.EMAIL_USER}>`, ...opts });
+          console.log('Email sent successfully:', info.messageId);
+          return info;
+        } catch (err) {
+          lastErr = err;
+          // Detect transient network errors
+          const transientCodes = ['ETIMEDOUT', 'ECONNRESET', 'ENOTFOUND', 'EAI_AGAIN', 'ECONNREFUSED', 'EHOSTUNREACH'];
+          const isTransient = err && (transientCodes.includes(err.code) || (err.message && err.message.toLowerCase().includes('timeout')));
+          console.warn(`Email send attempt ${i + 1} failed${isTransient ? ' (transient)' : ''}:`, err && err.message ? err.message : err);
+          if (!isTransient) break; // don't retry non-transient errors
+          // exponential backoff
+          await new Promise((r) => setTimeout(r, backoffMs * Math.pow(2, i)));
+        }
+      }
+      throw lastErr;
+    };
+
+    const info = await sendWithRetry(mailOptions);
     return info;
   } catch (error) {
     console.error('Error sending email:', error);
