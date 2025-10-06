@@ -129,26 +129,21 @@ export const sendWelcomeEmail = async (toEmail, userName = null) => {
 };
 
 // ===========================
-// Email Verification Email
+// Email Verification Email (OTP-only)
 // ===========================
 /**
- * Sends an email with a verification link and OTP.
+ * Sends an email with an OTP for email verification (no verification link).
  * @param {string} toEmail - Recipient email address
- * @param {string} token - Verification token for link
  * @param {string} otp - OTP code for verification
  * @param {string} [userName] - User's name (optional)
  * @returns {Promise<void>}
  * @throws {Error} If inputs are invalid or email sending fails
  */
-export const sendVerificationEmail = async (toEmail, token, otp, userName = null) => {
+export const sendVerificationEmail = async (toEmail, otp, userName = null) => {
   try {
     // Validate inputs
     if (!toEmail || typeof toEmail !== 'string' || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(toEmail)) {
       throw new Error('Invalid recipient email address');
-    }
-    // token is OPTIONAL now (server may still create it), validate only if provided
-    if (token !== undefined && token !== null && typeof token !== 'string') {
-      throw new Error('Invalid verification token');
     }
     if (!otp || typeof otp !== 'string') {
       throw new Error('Invalid OTP code');
