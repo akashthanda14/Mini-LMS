@@ -1,8 +1,10 @@
 // user_modules/index.js
 // Central export file for user authentication modules
 
-// Export all routes
-export { default as userRoutes } from './routes/userRoutes.js';
+// Export merged auth routes (replaces userRoutes)
+export { default as authRoutes } from './routes/authRoutes.js';
+// Backwards-compatible export name
+export { default as userRoutes } from './routes/authRoutes.js';
 
 // Export user controllers
 export {

@@ -11,7 +11,6 @@ import logger from './config/logger.js';
 import { requestLogger, errorLogger } from './middleware/requestLogger.js';
 
 // Import authentication routes
-import userAuthRoutes from './routes/userRoutes.js';
 import authRoutes from './routes/authRoutes.js';
 import googleAuthRoutes from './routes/googleAuthRoutes.js';
 import creatorRoutes from './routes/creatorRoutes.js';
@@ -255,12 +254,12 @@ app.get('/api-docs.json', (req, res) => {
 // ================================
 
 // Authentication routes (login, register, /auth/me)
+// Mount merged auth routes at both /api/auth and /api/user-auth for frontend compatibility
 app.use('/api/auth', authRoutes);
+app.use('/api/user-auth', authRoutes);
+
 // Google OAuth routes (mount under the same /api/auth prefix)
 app.use('/api/auth', googleAuthRoutes);
-
-// User authentication routes
-app.use('/api/user-auth', userAuthRoutes);
 
 // Creator application routes
 app.use('/api/creator', creatorRoutes);
