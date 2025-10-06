@@ -256,6 +256,8 @@ app.get('/api-docs.json', (req, res) => {
 
 // Authentication routes (login, register, /auth/me)
 app.use('/api/auth', authRoutes);
+// Google OAuth routes (mount under the same /api/auth prefix)
+app.use('/api/auth', googleAuthRoutes);
 
 // User authentication routes
 app.use('/api/user-auth', userAuthRoutes);
