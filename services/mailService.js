@@ -73,7 +73,7 @@ export const sendOTPEmail = async (email, otp, purpose = 'verification') => {
         break;
       case 'email_change':
         subject = 'Email Change Verification - OTP Code';
-        text = `Your OTP code for email change is: ${otp}\n\nThis code will expire in ${process.env.OTP_EXPIRY_MINUTES || 10} minutes.`;
+        text = `Your OTP code for email change is: ${otp}\n\nThis code will expire in ${process.env.OTP_EXPIRY_MINUTES || 10} minutes.\n\nIf you didn't request this code, please contact support immediately.`;
         break;
       default:
         subject = 'Verification Code';
@@ -118,7 +118,7 @@ export const sendVerificationEmail = async (email, otp = null, userName = 'User'
     
     if (!emailUser || !emailPass) {
       console.warn('⚠️  Email configuration not set.');
-      console.log(`📧 [DEV MODE] Verification link: ${verificationLink}`);
+      console.log(`📧 [DEV MODE] Verification link: ${verificationLink || '<link>'}`);
       if (otp) console.log(`📧 [DEV MODE] OTP: ${otp}`);
       return { success: true, message: 'Email not configured (dev mode)' };
     }
@@ -147,14 +147,10 @@ export const sendVerificationEmail = async (email, otp = null, userName = 'User'
       `,
     };
 
-    // ADD TIMEOUT: Max 3 seconds for email send in production
-    const timeoutMs = process.env.NODE_ENV === 'production' ? 3000 : 10000;
-    const sendPromise = transport.sendMail(mailOptions);
-    const timeoutPromise = new Promise((_, reject) => 
-      setTimeout(() => reject(new Error(`Email timeout after ${timeoutMs}ms`)), timeoutMs)
-    );
+    // configurable timeout
+    const timeoutMs = parseInt(process.env.MAIL_SEND_TIMEOUT || (process.env.NODE_ENV === 'production' ? '20000' : '10000'), 10);
+    await sendMailWithTimeout(mailOptions, { timeoutMs });
 
-    await Promise.race([sendPromise, timeoutPromise]);
     console.log(`✅ Verification email sent successfully to ${email}`);
     return { success: true };
   } catch (error) {
@@ -178,7 +174,7 @@ export const sendWelcomeEmail = async (email, name) => {
     }
 
     const mailOptions = {
-      from: process.env.EMAIL_FROM || process.env.EMAIL_USER,
+      from: process.env.EMAIL_FROM || emailUser,
       to: email,
       subject: 'Welcome to Our Platform!',
       html: `
@@ -190,7 +186,9 @@ export const sendWelcomeEmail = async (email, name) => {
       `,
     };
 
-    await transport.sendMail(mailOptions);
+    const timeoutMs = parseInt(process.env.MAIL_SEND_TIMEOUT || (process.env.NODE_ENV === 'production' ? '20000' : '10000'), 10);
+    await sendMailWithTimeout(mailOptions, { timeoutMs });
+
     console.log(`Welcome email sent to ${email}`);
     return { success: true };
   } catch (error) {
