@@ -3,7 +3,6 @@
 
 import nodemailer from 'nodemailer';
 import dotenv from 'dotenv';
-import { google } from 'googleapis';
 dotenv.config();
 
 const CONNECTION_TIMEOUT = parseInt(process.env.SMTP_CONNECTION_TIMEOUT || '60000', 10);
@@ -21,22 +20,7 @@ function createTransporter() {
     return null; // handled in send path
   }
 
-  const useOAuth = process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET && process.env.GOOGLE_REFRESH_TOKEN && process.env.EMAIL_USER;
-
-  if (useOAuth) {
-    const oAuth2Client = new google.auth.OAuth2(process.env.GOOGLE_CLIENT_ID, process.env.GOOGLE_CLIENT_SECRET);
-    oAuth2Client.setCredentials({ refresh_token: process.env.GOOGLE_REFRESH_TOKEN });
-    return nodemailer.createTransport({
-      service: 'gmail',
-      auth: { type: 'OAuth2', user: process.env.EMAIL_USER, clientId: process.env.GOOGLE_CLIENT_ID, clientSecret: process.env.GOOGLE_CLIENT_SECRET, refreshToken: process.env.GOOGLE_REFRESH_TOKEN },
-      logger: false,
-      pool: false,
-      connectionTimeout: CONNECTION_TIMEOUT,
-      greetingTimeout: GREETING_TIMEOUT,
-      socketTimeout: SOCKET_TIMEOUT
-    });
-  }
-
+  // fallback to username/password SMTP
   return nodemailer.createTransport({
     host: process.env.SMTP_HOST || 'smtp.gmail.com',
     port: parseInt(process.env.SMTP_PORT || '587', 10),
@@ -63,8 +47,6 @@ function isTransient(err) {
 }
 
 async function sendViaSendGrid(mailOptions) {
-  // lightweight HTTP fallback using fetch
-  // install: npm install @sendgrid/mail and set SENDGRID_API_KEY
   const sg = await import('@sendgrid/mail').then(m => m.default || m);
   sg.setApiKey(process.env.SENDGRID_API_KEY);
   const msg = {
