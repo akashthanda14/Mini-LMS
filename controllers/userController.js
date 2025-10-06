@@ -59,8 +59,8 @@ export const registerUser = async (req, res) => {
   perf.storeEmailOTP_existing = Date.now() - t1;
 
         // create verification token then send (fire-and-forget)
-        const tokenExisting = await createEmailVerificationToken(existing.id);
-        sendVerificationEmail(existing.email, tokenExisting, otp, 'User')
+        // const tokenExisting = await createEmailVerificationToken(existing.id);
+        sendVerificationEmail(existing.email, otp, 'User')
           .catch(err => console.error('Email resend failed:', err));
 
         return res.status(200).json({

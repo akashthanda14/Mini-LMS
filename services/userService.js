@@ -347,7 +347,9 @@ export const checkUserExistenceService = async (emailOrPhone) => {
 
 // --- Added: resendEmailVerificationService ---
 export const resendEmailVerificationService = async (email) => {
-  const cleanEmail = email.trim().toLowerCase();
+  if (!email) return { success: false, userFound: false, alreadyVerified: false };
+
+  const cleanEmail = String(email).trim().toLowerCase();
   const user = await findUserByEmail(cleanEmail);
 
   if (!user) {
@@ -359,18 +361,27 @@ export const resendEmailVerificationService = async (email) => {
   }
 
   try {
-    await prisma.$transaction(async (tx) => {
-      await tx.emailVerificationToken.deleteMany({
-        where: { userId: user.id },
-      });
+    // Generate a 6-digit OTP and expiry (10 minutes)
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    const expiry = new Date(Date.now() + 10 * 60 * 1000);
 
-      const newToken = await createEmailVerificationToken(user.id);
-      await sendVerificationEmail(user.email, newToken, null, user.name || 'User');
+    // Persist OTP to the user record (no token created/used)
+    await prisma.user.update({
+      where: { id: user.id },
+      data: {
+        pendingEmail: user.email,
+        pendingEmailOtp: otp,
+        pendingEmailExpiry: expiry,
+        updatedAt: new Date(),
+      },
     });
+
+    // Send OTP email
+    await sendVerificationEmail(user.email, otp, user.name || 'User');
 
     return { success: true, userFound: true, alreadyVerified: false };
   } catch (error) {
-    console.error('Error in resendEmailVerificationService:', error);
+    console.error('Error in resendEmailVerificationService (OTP flow):', error);
     throw error;
   }
 };
@@ -464,7 +475,7 @@ export const getUserAuthStatus = async (userId) => {
 // --- Added: sendEmailVerification (helper) ---
 export const sendEmailVerification = async (userId, email, userName, otp = null) => {
   const token = await createEmailVerificationToken(userId);
-  await sendVerificationEmail(email, token, otp, userName || 'User');
+  await sendVerificationEmail(email,otp, userName || 'User');
   return { success: true };
 };
 
@@ -485,51 +496,58 @@ export const cleanupExpiredTokens = async () => {
 };
 
 // --- Added: verifyUserEmailToken (verifies token, marks user, returns JWT) ---
-export const verifyUserEmailToken = async (token) => {
+export const verifyUserEmailToken = async (email, otp) => {
   try {
-    const verificationToken = await prisma.emailVerificationToken.findUnique({
-      where: { token },
-      include: {
-        user: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
-            emailVerified: true,
-            phoneVerified: true,
-            isProfileComplete: true,
-            role: true,
-          },
-        },
+    if (!email || !otp) {
+      return { success: false, error: 'INVALID_PARAMETERS' };
+    }
+
+    const cleanEmail = String(email).trim().toLowerCase();
+    const cleanOtp = String(otp).trim();
+
+    // Find user by either their current email or pendingEmail (in case email change flow)
+    const user = await prisma.user.findFirst({
+      where: {
+        OR: [{ email: cleanEmail }, { pendingEmail: cleanEmail }],
       },
     });
 
-    if (!verificationToken) {
-      return {
-        success: false,
-        error: 'TOKEN_NOT_FOUND',
-      };
+    if (!user) {
+      return { success: false, error: 'USER_NOT_FOUND' };
     }
 
-    if (verificationToken.expiresAt < new Date()) {
-      return {
-        success: false,
-        error: 'TOKEN_EXPIRED',
-      };
+    // If already verified
+    if (user.emailVerified && user.email === cleanEmail) {
+      return { success: false, error: 'ALREADY_VERIFIED' };
     }
 
-    if (verificationToken.usedAt) {
-      return {
-        success: false,
-        error: 'TOKEN_ALREADY_USED',
-      };
+    // Ensure there is an OTP to validate against
+    if (!user.pendingEmailOtp) {
+      return { success: false, error: 'OTP_NOT_FOUND' };
     }
 
+    // Check expiry
+    if (!user.pendingEmailExpiry || user.pendingEmailExpiry < new Date()) {
+      return { success: false, error: 'OTP_EXPIRED' };
+    }
+
+    // Validate OTP
+    if (String(user.pendingEmailOtp).trim() !== cleanOtp) {
+      return { success: false, error: 'OTP_INVALID' };
+    }
+
+    // All good — mark email as verified and clear pending fields
     const result = await prisma.$transaction(async (tx) => {
-      const updatedUser = await tx.user.update({
-        where: { id: verificationToken.userId },
+      const updated = await tx.user.update({
+        where: { id: user.id },
         data: {
+          // Promote pendingEmail to email if present, otherwise keep existing
+          email: user.pendingEmail ? user.pendingEmail : user.email,
           emailVerified: true,
+          pendingEmail: null,
+          pendingEmailOtp: null,
+          pendingEmailExpiry: null,
+          updatedAt: new Date(),
         },
         select: {
           id: true,
@@ -543,12 +561,7 @@ export const verifyUserEmailToken = async (token) => {
         },
       });
 
-      await tx.emailVerificationToken.update({
-        where: { id: verificationToken.id },
-        data: { usedAt: new Date() },
-      });
-
-      return updatedUser;
+      return updated;
     });
 
     const authToken = jwt.sign(
@@ -571,7 +584,7 @@ export const verifyUserEmailToken = async (token) => {
       nextStep: requiresProfileCompletion ? 'profile-completion' : 'dashboard',
     };
   } catch (error) {
-    console.error('Database error in verifyUserEmailToken:', error);
+    console.error('Error in verifyUserEmailToken (OTP flow):', error);
     return {
       success: false,
       error: 'DATABASE_ERROR',
