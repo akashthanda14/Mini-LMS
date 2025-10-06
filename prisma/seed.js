@@ -346,22 +346,274 @@ async function main() {
 
   console.log(`✅ Learner 2 enrolled in Course 2 (In Progress - 66%)\n`);
 
-  console.log('✨ Database seeding completed successfully!\n');
-  console.log('📊 Summary:');
-  console.log('  - 1 Admin');
-  console.log('  - 2 Learners');
-  console.log('  - 1 Approved Creator');
-  console.log('  - 2 Published Courses');
-  console.log('  - 6 Lessons (3 per course)');
-  console.log('  - 3 Enrollments');
-  console.log('  - 1 Certificate\n');
-  console.log('🔑 Login credentials for all users:');
-  console.log('  Password: password123\n');
-  console.log('👤 User Accounts:');
-  console.log('  Admin:    admin@microcourses.com');
-  console.log('  Learner1: john@example.com');
-  console.log('  Learner2: emma@example.com');
-  console.log('  Creator:  sarah@example.com\n');
+  // Course 3: Python for Data Science
+  const course3 = await prisma.course.create({
+    data: {
+  creatorId: creator.id,
+  title: 'Python for Data Science',
+  description: 'Learn Python with real-world data science examples: data manipulation, visualization, and machine learning basics.',
+  thumbnail: 'https://images.unsplash.com/photo-1503376780353-7e6692767b70?w=800',
+  category: 'Programming',
+  level: CourseLevel.INTERMEDIATE,
+  duration: 360, // 6 hours total
+  status: CourseStatus.DRAFT
+    }
+  });
+  console.log(`✅ Course 3 created: ${course3.title}`);
+
+  const course3Lesson1 = await prisma.lesson.create({
+    data: {
+      courseId: course3.id,
+      title: 'Python Environment & pandas Basics',
+      videoUrl: 'https://www.youtube.com/watch?v=vmEHCJofslg',
+      transcript: 'Welcome to Python for Data Science. In this lesson we set up Python, install pandas, and work with data frames...',
+      order: 1,
+      duration: 60
+    }
+  });
+
+  const course3Lesson2 = await prisma.lesson.create({
+    data: {
+      courseId: course3.id,
+      title: 'Data Cleaning and Visualization',
+      videoUrl: 'https://www.youtube.com/watch?v=LHBE6Q9XlzI',
+      transcript: 'Data cleaning is a critical step. We will cover missing values, transformations, and visualizing data with matplotlib and seaborn...',
+      order: 2,
+      duration: 120
+    }
+  });
+
+  const course3Lesson3 = await prisma.lesson.create({
+    data: {
+      courseId: course3.id,
+      title: 'Intro to Machine Learning with scikit-learn',
+      videoUrl: 'https://www.youtube.com/watch?v=Gv9_4yMHFhI',
+      transcript: 'This lesson introduces basic machine learning workflows, training simple models, and evaluating their performance...',
+      order: 3,
+      duration: 180
+    }
+  });
+
+  console.log(`  ✅ Added 3 lessons to Course 3\n`);
+
+  // Course 4: Node.js Masterclass
+  const course4 = await prisma.course.create({
+    data: {
+  creatorId: creator.id,
+  title: 'Node.js Masterclass: Backend Development',
+  description: 'Deep dive into Node.js and backend development: Express, databases, authentication, and deployment.',
+  thumbnail: 'https://images.unsplash.com/photo-1515879218367-8466d910aaa4?w=800',
+  category: 'Programming',
+  level: CourseLevel.ADVANCED,
+  duration: 420, // 7 hours total
+  status: CourseStatus.DRAFT
+    }
+  });
+  console.log(`✅ Course 4 created: ${course4.title}`);
+
+  const course4Lesson1 = await prisma.lesson.create({
+    data: {
+      courseId: course4.id,
+      title: 'Node.js & Express Fundamentals',
+      videoUrl: 'https://www.youtube.com/watch?v=TlB_eWDSMt4',
+      transcript: 'Start with Node.js fundamentals, the event loop, and building HTTP servers with Express. We will create a simple REST API...',
+      order: 1,
+      duration: 90
+    }
+  });
+
+  const course4Lesson2 = await prisma.lesson.create({
+    data: {
+      courseId: course4.id,
+      title: 'Working with Databases and ORMs',
+      videoUrl: 'https://www.youtube.com/watch?v=EN6Dx22cPRI',
+      transcript: 'Learn to connect Node.js apps to databases, use ORMs (like Prisma), and write migrations and queries safely...',
+      order: 2,
+      duration: 120
+    }
+  });
+
+  const course4Lesson3 = await prisma.lesson.create({
+    data: {
+      courseId: course4.id,
+      title: 'Authentication, Testing, and Deployment',
+      videoUrl: 'https://www.youtube.com/watch?v=6FOq4cUdH8k',
+      transcript: 'We will cover JWT and session-based auth, essential testing strategies, and deploying Node.js apps to popular cloud platforms...',
+      order: 3,
+      duration: 210
+    }
+  });
+
+  console.log(`  ✅ Added 3 lessons to Course 4\n`);
+  // ---------- Bulk data generation: additional learners, creators, courses, lessons, enrollments ----------
+  console.log('\n🔁 Generating additional test data (learners, creators, courses, lessons, enrollments)...\n');
+
+  // Create additional learners up to 20 total (we already have 2)
+  const extraLearners = [];
+  for (let i = 3; i <= 20; i++) {
+    const l = await prisma.user.create({
+      data: {
+        username: `learner${i}`,
+        fullName: `Learner ${i}`,
+        email: `learner${i}@example.com`,
+        password: hashedPassword,
+        role: UserRole.LEARNER,
+        emailVerified: true,
+        phoneNumber: `+10000000${String(i).padStart(2, '0')}`,
+        phoneVerified: true,
+        isProfileComplete: true,
+        isActive: true,
+        country: 'United States',
+        state: 'CA',
+        zip: '90001',
+        bio: `Auto-generated learner ${i}`,
+        lastLoginAt: new Date()
+      }
+    });
+    extraLearners.push(l);
+  }
+  console.log(`  ✅ Created ${extraLearners.length} extra learners (total learners now: ${2 + extraLearners.length})`);
+
+  // Create additional creators to reach 10 total (we already have 1)
+  const extraCreators = [];
+  for (let i = 2; i <= 10; i++) {
+    const c = await prisma.user.create({
+      data: {
+        username: `creator${i}`,
+        fullName: `Creator ${i}`,
+        email: `creator${i}@example.com`,
+        password: hashedPassword,
+        role: UserRole.CREATOR,
+        emailVerified: true,
+        phoneNumber: `+20000000${String(i).padStart(2, '0')}`,
+        phoneVerified: true,
+        isProfileComplete: true,
+        isActive: true,
+        country: 'United States',
+        state: 'NY',
+        zip: '10001',
+        bio: `Auto-generated creator ${i}`,
+        avatar: `https://i.pravatar.cc/150?u=creator${i}`,
+        lastLoginAt: new Date()
+      }
+    });
+
+    await prisma.creatorApplication.create({
+      data: {
+        userId: c.id,
+        bio: `Auto-approved application for ${c.fullName}`,
+        portfolio: `https://creator${i}.example.com`,
+        experience: '5 years teaching and development',
+        status: CreatorApplicationStatus.APPROVED,
+        reviewedBy: admin.id,
+        reviewedAt: new Date()
+      }
+    });
+
+    extraCreators.push(c);
+  }
+  console.log(`  ✅ Created ${extraCreators.length} extra creators (total creators now: ${1 + extraCreators.length})`);
+
+  const allCreators = [creator, ...extraCreators];
+
+  // Titles and thumbnails pool for additional courses
+  const additionalCourseData = [
+    { title: 'Advanced TypeScript', level: CourseLevel.ADVANCED, thumbnail: 'https://images.unsplash.com/photo-1555066931-4365d14bab8c?w=800' },
+    { title: 'Data Structures & Algorithms', level: CourseLevel.INTERMEDIATE, thumbnail: 'https://images.unsplash.com/photo-1518770660439-4636190af475?w=800' },
+    { title: 'SQL & Databases', level: CourseLevel.INTERMEDIATE, thumbnail: 'https://images.unsplash.com/photo-1555066931-8a1f5b8e9f3b?w=800' },
+    { title: 'Docker & Containerization', level: CourseLevel.INTERMEDIATE, thumbnail: 'https://images.unsplash.com/photo-1519389950473-47ba0277781c?w=800' },
+    { title: 'Kubernetes from Zero', level: CourseLevel.ADVANCED, thumbnail: 'https://images.unsplash.com/photo-1542744173-8e7e53415bb0?w=800' },
+    { title: 'Go Programming: Systems Programming', level: CourseLevel.ADVANCED, thumbnail: 'https://images.unsplash.com/photo-1526378721756-9b9d3f36f0b6?w=800' },
+    { title: 'C# and .NET Core', level: CourseLevel.INTERMEDIATE, thumbnail: 'https://images.unsplash.com/photo-1519389950473-47ba0277781c?w=800' },
+    { title: 'DevOps Fundamentals', level: CourseLevel.INTERMEDIATE, thumbnail: 'https://images.unsplash.com/photo-1526378721756-9b9d3f36f0b6?w=800' },
+    { title: 'Machine Learning Practical', level: CourseLevel.ADVANCED, thumbnail: 'https://images.unsplash.com/photo-1518770660439-4636190af475?w=800' },
+    { title: 'Front-end Performance Optimization', level: CourseLevel.INTERMEDIATE, thumbnail: 'https://images.unsplash.com/photo-1555066931-4365d14bab8c?w=800' },
+    { title: 'Fullstack Project: Build & Deploy', level: CourseLevel.INTERMEDIATE, thumbnail: 'https://images.unsplash.com/photo-1542744173-8e7e53415bb0?w=800' }
+  ];
+
+  // Create additional courses to reach 15 total (we already have 4)
+  const createdAdditionalCourses = [];
+  for (let i = 0; i < additionalCourseData.length; i++) {
+    const info = additionalCourseData[i];
+    // assign Sarah (creator) as owner for all additional courses
+    const c = await prisma.course.create({
+      data: {
+        creatorId: creator.id,
+        title: info.title,
+        description: `${info.title} - auto-generated course description for seed data.`,
+        thumbnail: info.thumbnail,
+        category: 'Programming',
+        level: info.level,
+        duration: 180 + i * 30,
+        status: CourseStatus.DRAFT
+      }
+    });
+
+    const lessons = [];
+    for (let j = 1; j <= 3; j++) {
+      const lesson = await prisma.lesson.create({
+        data: {
+          courseId: c.id,
+          title: `${c.title} - Lesson ${j}`,
+          videoUrl: `https://www.youtube.com/watch?v=seed${i}${j}`,
+          transcript: `Transcript for ${c.title} - Lesson ${j}`,
+          order: j,
+          duration: 30 + j * 15
+        }
+      });
+      lessons.push(lesson);
+    }
+
+  createdAdditionalCourses.push({ course: c, lessons });
+  console.log(`  ✅ Created course: ${c.title} (creator: ${creator.email}) as DRAFT with 3 lessons`);
+  }
+
+  // Enroll each learner in up to 3 random courses
+  const allLearners = [learner1, learner2, ...extraLearners];
+  const allCourses = [course1, course2, course3, course4, ...createdAdditionalCourses.map(x => x.course)];
+  let enrollmentsCreated = 0;
+  for (const l of allLearners) {
+    const picks = new Set();
+    while (picks.size < 3) picks.add(Math.floor(Math.random() * allCourses.length));
+    for (const idx of picks) {
+      const courseToEnroll = allCourses[idx];
+      try {
+        await prisma.enrollment.create({
+          data: {
+            userId: l.id,
+            courseId: courseToEnroll.id,
+            progress: Math.floor(Math.random() * 101),
+            enrolledAt: new Date()
+          }
+        });
+        enrollmentsCreated++;
+      } catch (e) {
+        // ignore unique constraint errors
+      }
+    }
+  }
+  console.log(`\n  ✅ Created ~${enrollmentsCreated} enrollments (each learner enrolled in up to 3 courses)`);
+
+  // Summary (dynamic counts)
+  console.log('\n✨ Database seeding complete. Final counts from DB:');
+  const totalUsers = await prisma.user.count();
+  const totalLearners = await prisma.user.count({ where: { role: UserRole.LEARNER } });
+  const totalCreators = await prisma.user.count({ where: { role: UserRole.CREATOR } });
+  const totalCourses = await prisma.course.count();
+  const totalLessons = await prisma.lesson.count();
+  const totalEnrollments = await prisma.enrollment.count();
+  const totalCertificates = await prisma.certificate.count();
+
+  console.log(`  - Users: ${totalUsers}`);
+  console.log(`  - Learners: ${totalLearners}`);
+  console.log(`  - Creators: ${totalCreators}`);
+  console.log(`  - Courses: ${totalCourses}`);
+  console.log(`  - Lessons: ${totalLessons}`);
+  console.log(`  - Enrollments: ${totalEnrollments}`);
+  console.log(`  - Certificates: ${totalCertificates}\n`);
+
+  console.log('🔑 Login credentials for seeded users:');
+  console.log('  Password for all seeded users: password123\n');
 }
 
 main()
