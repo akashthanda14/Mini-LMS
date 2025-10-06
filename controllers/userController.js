@@ -54,19 +54,12 @@ export const registerUser = async (req, res) => {
           });
         }
 
-        /* resend verification email */
-        const otp = String(Math.floor(100000 + Math.random() * 900000));
-        const t1 = Date.now();
-        await storeEmailOTP(existing.id, otp);
-        perf.storeEmailOTP_existing = Date.now() - t1;
-
-  // send OTP (no token creation)
-  sendVerificationEmail(existing.email, otp, 'User')
-          .catch(err => console.error('Email resend failed:', err));
+        // Auto-verify existing user in free plan flow
+        await verifyUserEmail(existing.id);
 
         return res.status(200).json({
           success: true,
-          message: 'Verification email resent.',
+          message: 'Email verified. You can now log in.',
           userId: existing.id,
           verificationType: 'email',
           requiresProfileCompletion: !existing.isProfileComplete,
@@ -83,20 +76,12 @@ export const registerUser = async (req, res) => {
       });
       perf.createUser = Date.now() - t2;
 
-      const otp = String(Math.floor(100000 + Math.random() * 900000));
-      const t3 = Date.now();
-      await storeEmailOTP(user.id, otp);
-      perf.storeEmailOTP_new = Date.now() - t3;
-
-  // send OTP (no token creation)
-  sendVerificationEmail(user.email, otp, 'User')
-        .catch(err => console.error('Email send failed:', err));
-
+      // New user: mark verified immediately (free plan flow)
       perf.total = Date.now() - perfStart;
 
       return res.status(201).json({
         success: true,
-        message: 'Registration successful. Check your email for verification.',
+        message: 'Registration successful. You can now log in.',
         userId: user.id,
         verificationType: 'email',
         contactInfo: user.email,
