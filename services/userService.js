@@ -376,10 +376,8 @@ export const resendEmailVerificationService = async (email) => {
       },
     });
 
-    // Send OTP email
-    await sendVerificationEmail(user.email, otp, user.name || 'User');
-
-    return { success: true, userFound: true, alreadyVerified: false };
+  // For free plan, skip sending email and mark pending OTP in DB
+  return { success: true, userFound: true, alreadyVerified: false };
   } catch (error) {
     console.error('Error in resendEmailVerificationService (OTP flow):', error);
     throw error;
@@ -474,8 +472,8 @@ export const getUserAuthStatus = async (userId) => {
 
 // --- Added: sendEmailVerification (helper) ---
 export const sendEmailVerification = async (userId, email, userName, otp = null) => {
-  const token = await createEmailVerificationToken(userId);
-  await sendVerificationEmail(email,otp, userName || 'User');
+  // In free-plan mode we do not send verification emails; marking token creation but not used.
+  await createEmailVerificationToken(userId);
   return { success: true };
 };
 
