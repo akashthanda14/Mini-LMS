@@ -35,15 +35,17 @@ import {
  */
 export const registerUser = async (req, res) => {
   try {
-  const { email, phoneNumber } = req.body;
-  const perfStart = Date.now();
-  const perf = {};
+    const { email, phoneNumber } = req.body;
+    const perfStart = Date.now();
+    const perf = {};
 
     /* --------------------------- email flow --------------------------- */
     if (email) {
+      const cleanEmail = email.trim().toLowerCase();
       const t0 = Date.now();
-      const existing = await findUserByEmail(email);
+      const existing = await findUserByEmail(cleanEmail);
       perf.findUserByEmail = Date.now() - t0;
+
       if (existing) {
         if (existing.emailVerified) {
           return res.status(409).json({
@@ -53,14 +55,14 @@ export const registerUser = async (req, res) => {
         }
 
         /* resend verification email */
-  const otp = String(Math.floor(100000 + Math.random() * 900000));
-  const t1 = Date.now();
-  await storeEmailOTP(existing.id, otp);
-  perf.storeEmailOTP_existing = Date.now() - t1;
+        const otp = String(Math.floor(100000 + Math.random() * 900000));
+        const t1 = Date.now();
+        await storeEmailOTP(existing.id, otp);
+        perf.storeEmailOTP_existing = Date.now() - t1;
 
         // create verification token then send (fire-and-forget)
-        // const tokenExisting = await createEmailVerificationToken(existing.id);
-        sendVerificationEmail(existing.email, otp, 'User')
+        const tokenExisting = await createEmailVerificationToken(existing.id);
+        sendVerificationEmail(existing.email,otp, 'User')
           .catch(err => console.error('Email resend failed:', err));
 
         return res.status(200).json({
@@ -73,23 +75,23 @@ export const registerUser = async (req, res) => {
       }
 
       /* create new user */
-  const t2 = Date.now();
-  const user = await createUser({
-        email: email.toLowerCase().trim(),
+      const t2 = Date.now();
+      const user = await createUser({
+        email: cleanEmail,
         emailVerified: false,
         phoneVerified: false,
         isProfileComplete: false,
       });
-  perf.createUser = Date.now() - t2;
+      perf.createUser = Date.now() - t2;
 
-  const otp = String(Math.floor(100000 + Math.random() * 900000));
-  const t3 = Date.now();
-  await storeEmailOTP(user.id, otp);
-  perf.storeEmailOTP_new = Date.now() - t3;
+      const otp = String(Math.floor(100000 + Math.random() * 900000));
+      const t3 = Date.now();
+      await storeEmailOTP(user.id, otp);
+      perf.storeEmailOTP_new = Date.now() - t3;
 
       // create verification token then send (fire-and-forget)
       const tokenNew = await createEmailVerificationToken(user.id);
-      sendVerificationEmail(user.email, tokenNew, otp, 'User')
+      sendVerificationEmail(user.email,otp,'User')
         .catch(err => console.error('Email send failed:', err));
 
       perf.total = Date.now() - perfStart;
@@ -105,6 +107,7 @@ export const registerUser = async (req, res) => {
       });
     } else if (phoneNumber) {
       /* --------------------------- phone flow --------------------------- */
+      // phone flows removed — either implement or delete this branch
     } else {
       return res.status(400).json({
         success: false,
