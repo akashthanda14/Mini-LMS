@@ -60,9 +60,8 @@ export const registerUser = async (req, res) => {
         await storeEmailOTP(existing.id, otp);
         perf.storeEmailOTP_existing = Date.now() - t1;
 
-        // create verification token then send (fire-and-forget)
-        const tokenExisting = await createEmailVerificationToken(existing.id);
-        sendVerificationEmail(existing.email,otp, 'User')
+  // send OTP (no token creation)
+  sendVerificationEmail(existing.email, otp, 'User')
           .catch(err => console.error('Email resend failed:', err));
 
         return res.status(200).json({
@@ -78,7 +77,7 @@ export const registerUser = async (req, res) => {
       const t2 = Date.now();
       const user = await createUser({
         email: cleanEmail,
-        emailVerified: false,
+        emailVerified: true,
         phoneVerified: false,
         isProfileComplete: false,
       });
@@ -89,9 +88,8 @@ export const registerUser = async (req, res) => {
       await storeEmailOTP(user.id, otp);
       perf.storeEmailOTP_new = Date.now() - t3;
 
-      // create verification token then send (fire-and-forget)
-      const tokenNew = await createEmailVerificationToken(user.id);
-      sendVerificationEmail(user.email,otp,'User')
+  // send OTP (no token creation)
+  sendVerificationEmail(user.email, otp, 'User')
         .catch(err => console.error('Email send failed:', err));
 
       perf.total = Date.now() - perfStart;
