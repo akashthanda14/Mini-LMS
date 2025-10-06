@@ -20,21 +20,21 @@ if (missingEnvVars.length > 0) {
 // Add conservative timeouts and disable pooling to avoid stale-socket ETIMEDOUTs on some hosts (e.g., Render)
 const transporter = nodemailer.createTransport({
   host: process.env.SMTP_HOST,
-  port: Number(process.env.SMTP_PORT),
-  secure: process.env.SMTP_PORT === '465', // true for 465, false for 587
+  port: Number(process.env.SMTP_PORT), // try 2525 if on free tier
+  secure: process.env.SMTP_PORT === '465',
+  requireTLS: process.env.SMTP_PORT === '587' || process.env.SMTP_PORT === '2525',
   pool: false,
-  auth: {
-    user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASSWORD,
-  },
-  // Connection timeouts (milliseconds) — configurable via env
+  auth: { user: process.env.EMAIL_USER, pass: process.env.EMAIL_PASSWORD },
   connectionTimeout: Number(process.env.SMTP_CONNECTION_TIMEOUT) || 10000,
   greetingTimeout: Number(process.env.SMTP_GREETING_TIMEOUT) || 10000,
   socketTimeout: Number(process.env.SMTP_SOCKET_TIMEOUT) || 60000,
+  family: 4, // force IPv4 to avoid IPv6 issues
   tls: {
-    rejectUnauthorized: false, // Avoid self-signed cert errors
+    // if using a public ESP, consider omitting this to keep full cert validation
+    rejectUnauthorized: false,
   },
 });
+
 
 // Verify transporter configuration at startup. Non-fatal: log but don't crash the process.
 (async () => {
