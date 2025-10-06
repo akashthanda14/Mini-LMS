@@ -1,64 +1,91 @@
 // services/mailService.js
-// Email service for sending verification emails and OTPs
+// Centralized email sending helper used by the backend.
+// Purpose:
+// - Provide a single place for all transactional emails (welcome, verification OTP, login OTP, password resets).
+// - Prefer an HTTP-based provider (Resend) when configured, otherwise fall back to SMTP via Nodemailer.
+// - Include conservative timeouts and a small retry/backoff for transient network errors common on PaaS providers.
+//
+// Notes and operational guidance:
+// - If you use Resend (set RESEND_API_KEY), you must verify your sending domain (or use an allowed from-address).
+//   Resend will reject unverified public domains like gmail.com and return 403 validation errors.
+// - On some hosts (e.g., Render) outbound SMTP connections can be unreliable or blocked. The transporter forces
+//   IPv4 and adds connection/greeting/socket timeouts to reduce long hangs (ETIMEDOUT). We also disable pooling
+//   to avoid stale sockets causing pool-level timeouts.
+// - This file intentionally logs transporter.verify() failures as warnings (non-fatal). That keeps the app
+//   available while allowing send attempts to surface errors and trigger retries at runtime.
 
 import dotenv from 'dotenv';
 dotenv.config();
 import nodemailer from 'nodemailer';
-// no additional packages required — will use native fetch for Resend HTTP API when configured
+// Use the global `fetch` (Node >=18) for Resend HTTP API calls; no extra dependency required.
 
 // --- Constants ---
-const RESET_TOKEN_EXPIRATION_MINUTES = 60; // Used in password reset email
-const OTP_EXPIRATION_MINUTES = 10; // OTP expiration time
+// Keep these values in sync with any frontend copy that mentions expiry times.
+const RESET_TOKEN_EXPIRATION_MINUTES = 60; // Password reset link lifetime
+const OTP_EXPIRATION_MINUTES = 10; // OTP lifetime shown in verification emails
 
 // --- Environment Variable Validation ---
+// IMPORTANT: the SMTP env vars are required in the current code path. If you plan to use only Resend,
+// you can still leave SMTP vars populated or remove the strict check (careful: other code assumes EMAIL_USER).
 const requiredEnvVars = ['SMTP_HOST', 'SMTP_PORT', 'EMAIL_USER', 'EMAIL_PASSWORD'];
 const missingEnvVars = requiredEnvVars.filter((key) => !process.env[key]);
 if (missingEnvVars.length > 0) {
+  // Throwing here makes missing configuration explicit during app startup — prefer to fail fast in most setups.
   throw new Error(`Missing required environment variables: ${missingEnvVars.join(', ')}`);
 }
 
 // --- Nodemailer Transporter Setup ---
-// Add conservative timeouts and disable pooling to avoid stale-socket ETIMEDOUTs on some hosts (e.g., Render)
+// Configure a conservative transporter: no pooling, explicit timeouts, IPv4-only, and TLS options.
+// These choices were made after observing intermittent ETIMEDOUT/connection issues in production.
 const transporter = nodemailer.createTransport({
   host: process.env.SMTP_HOST,
-  port: Number(process.env.SMTP_PORT), // try 2525 if on free tier
+  port: Number(process.env.SMTP_PORT), // Common alternatives: 587, 465, 2525
   secure: process.env.SMTP_PORT === '465',
   requireTLS: process.env.SMTP_PORT === '587' || process.env.SMTP_PORT === '2525',
-  pool: false,
+  pool: false, // disable pooling to avoid stale-socket pool timeouts
   auth: { user: process.env.EMAIL_USER, pass: process.env.EMAIL_PASSWORD },
+  // Short timeouts help the process detect unreachable SMTP servers quickly and allow retry/backoff logic to run.
   connectionTimeout: Number(process.env.SMTP_CONNECTION_TIMEOUT) || 10000,
   greetingTimeout: Number(process.env.SMTP_GREETING_TIMEOUT) || 10000,
   socketTimeout: Number(process.env.SMTP_SOCKET_TIMEOUT) || 60000,
-  family: 4, // force IPv4 to avoid IPv6 issues
+  family: 4, // prefer IPv4 on platforms where IPv6 can be flaky
   tls: {
-    // if using a public ESP, consider omitting this to keep full cert validation
+    // In some environments the TLS certificate chain may not validate cleanly; setting rejectUnauthorized:false
+    // avoids failures during startups where the platform provides a managed SMTP endpoint. If you control the
+    // SMTP/ESP, prefer leaving this at true and ensuring proper certs.
     rejectUnauthorized: false,
   },
 });
 
 
-// Verify transporter configuration at startup. Non-fatal: log but don't crash the process.
+// Verify transporter configuration at startup.
+// This is non-fatal: we log a warning but allow the server to start. Runtime send attempts will surface errors
+// and the retry wrapper below will handle transient failures instead of crashing the process at boot.
 (async () => {
   try {
     await transporter.verify();
     console.log('Email transporter is ready to send messages');
   } catch (error) {
     console.warn('Email transporter verification warning (non-fatal):', error && error.message ? error.message : error);
-    // don't throw — allow the app to start; send attempts will retry and surface errors at runtime
+    // Intentionally don't throw here to keep the service available.
   }
 })();
 
 // --- Resend HTTP helper (if RESEND_API_KEY provided) ---
 /**
- * Send email via Resend API (https://resend.com)
- * @param {{from:string,to:string,subject:string,html:string}} mailOptions
+ * Send email via Resend's HTTP API.
+ * Resend offers a simple transactional API; when using it you must ensure the `from` address is
+ * a verified sending domain (Resend will reject gmail.com/other public domains).
+ *
+ * mailOptions should include: { from, to, subject, html }
  */
 const sendViaResend = async (mailOptions) => {
   const apiKey = process.env.RESEND_API_KEY;
   if (!apiKey) throw new Error('RESEND_API_KEY not configured');
 
+  // Default `from` falls back to MAIL_FROM_NAME or EMAIL_USER. Prefer setting MAIL_FROM explicitly.
   const payload = {
-    from: mailOptions.from || `"${process.env.MAIL_FROM_NAME || 'MicroCourse LMS'}" <${process.env.EMAIL_USER}>`,
+    from: mailOptions.from || `${process.env.MAIL_FROM_NAME || 'MicroCourse LMS'} <${process.env.EMAIL_USER}>`,
     to: mailOptions.to,
     subject: mailOptions.subject,
     html: mailOptions.html,
@@ -75,6 +102,7 @@ const sendViaResend = async (mailOptions) => {
     });
 
     if (!res.ok) {
+      // Capture response text for easier debugging (Resend returns helpful validation messages).
       const text = await res.text();
       const err = new Error(`Resend API error: ${res.status} ${res.statusText}`);
       err.status = res.status;
@@ -86,6 +114,7 @@ const sendViaResend = async (mailOptions) => {
     console.log('Email sent via Resend, id=', data.id || data.messageId || '(unknown)');
     return data;
   } catch (err) {
+    // Log and rethrow so the caller can decide on fallback behavior.
     console.error('Error sending via Resend:', err && (err.message || err));
     throw err;
   }
@@ -94,13 +123,19 @@ const sendViaResend = async (mailOptions) => {
 // --- General Send Email Function ---
 /**
  * Internal helper to send an email.
- * @param {Object} mailOptions - Nodemailer mailOptions
+ * Behavior summary:
+ *  - Validates basic mailOptions shape (from/to/subject/html).
+ *  - If RESEND_API_KEY is set, prefers Resend HTTP API.
+ *  - Otherwise, uses Nodemailer SMTP transporter with a small retry+backoff for transient errors.
+ *
+ * Important: this function intentionally throws on invalid inputs so callers can handle failures explicitly.
+ *
+ * @param {Object} mailOptions - Nodemailer-style mailOptions
  * @returns {Promise<Object>} Email sending result
- * @throws {Error} If mailOptions is invalid or email sending fails
  */
 const sendEmail = async (mailOptions) => {
   try {
-    // Validate mailOptions
+    // Basic validation to avoid hard-to-debug server errors later.
     if (!mailOptions || typeof mailOptions !== 'object') {
       throw new Error('Invalid mail options');
     }
@@ -114,31 +149,36 @@ const sendEmail = async (mailOptions) => {
     if (!html || typeof html !== 'string') {
       throw new Error('Invalid email HTML content');
     }
+    // Ensure the sender stream is predictable. If you want to allow custom from addresses,
+    // relax this check and ensure MAIL_FROM is set appropriately.
     if (from && from !== `"MicroCourse LMS" <${process.env.EMAIL_USER}>`) {
       throw new Error('Invalid sender address');
     }
 
-    // If RESEND_API_KEY is present, prefer Resend HTTP API
+    // Prefer the HTTP provider if configured. This avoids many SMTP network issues and gives
+    // better visibility into deliverability, but requires a verified sending domain.
     if (process.env.RESEND_API_KEY) {
       return await sendViaResend(mailOptions);
     }
 
-    // Use a small retry wrapper to handle transient network errors (ETIMEDOUT, ECONNRESET, etc.)
+    // --- SMTP send with retry/backoff ---
+    // We retry only for a short list of transient network errors commonly seen on PaaS hosts.
     const sendWithRetry = async (opts, attempts = 3, backoffMs = 500) => {
       let lastErr;
       for (let i = 0; i < attempts; i++) {
         try {
+          // Always set a canonical from to keep headers consistent.
           const info = await transporter.sendMail({ from: `"MicroCourse LMS" <${process.env.EMAIL_USER}>`, ...opts });
           console.log('Email sent successfully:', info.messageId);
           return info;
         } catch (err) {
           lastErr = err;
-          // Detect transient network errors
+          // Detect transient network errors that merit a retry.
           const transientCodes = ['ETIMEDOUT', 'ECONNRESET', 'ENOTFOUND', 'EAI_AGAIN', 'ECONNREFUSED', 'EHOSTUNREACH'];
           const isTransient = err && (transientCodes.includes(err.code) || (err.message && err.message.toLowerCase().includes('timeout')));
           console.warn(`Email send attempt ${i + 1} failed${isTransient ? ' (transient)' : ''}:`, err && err.message ? err.message : err);
-          if (!isTransient) break; // don't retry non-transient errors
-          // exponential backoff
+          if (!isTransient) break; // stop retrying for non-transient errors (auth, bad envelope, etc.)
+          // Exponential backoff before retrying.
           await new Promise((r) => setTimeout(r, backoffMs * Math.pow(2, i)));
         }
       }
@@ -148,6 +188,7 @@ const sendEmail = async (mailOptions) => {
     const info = await sendWithRetry(mailOptions);
     return info;
   } catch (error) {
+    // Normalize the error message for callers and preserve the original to logs for debugging.
     console.error('Error sending email:', error);
     throw new Error(`Failed to send email: ${error.message}`);
   }
@@ -158,10 +199,9 @@ const sendEmail = async (mailOptions) => {
 // ===========================
 /**
  * Sends a welcome email to a new user.
- * @param {string} toEmail - Recipient email address
- * @param {string} [userName] - User's name (optional)
- * @returns {Promise<void>}
- * @throws {Error} If inputs are invalid or email sending fails
+ * Template notes:
+ * - Uses inline styles for predictable rendering across email clients.
+ * - Uses `process.env.FRONTEND_URL` for dashboard links; set this in environment for correct links.
  */
 export const sendWelcomeEmail = async (toEmail, userName = null) => {
   try {
@@ -206,11 +246,7 @@ export const sendWelcomeEmail = async (toEmail, userName = null) => {
 // ===========================
 /**
  * Sends an email with an OTP for email verification (no verification link).
- * @param {string} toEmail - Recipient email address
- * @param {string} otp - OTP code for verification
- * @param {string} [userName] - User's name (optional)
- * @returns {Promise<void>}
- * @throws {Error} If inputs are invalid or email sending fails
+ * The template includes the OTP and the configured expiry time constant.
  */
 export const sendVerificationEmail = async (toEmail, otp, userName = null) => {
   try {
@@ -262,13 +298,7 @@ export const sendVerificationEmail = async (toEmail, otp, userName = null) => {
 // OTP-Only Email
 // ===========================
 /**
- * Sends an email with OTP only (no verification link).
- * @param {string} toEmail - Recipient email address
- * @param {string} [userName='User'] - User's name (optional)
- * @param {string} otp - OTP code
- * @param {string} [purpose='verification'] - Purpose of OTP
- * @returns {Promise<void>}
- * @throws {Error} If inputs are invalid or email sending fails
+ * Generic OTP email template used for verification and login flows.
  */
 export const sendOTPEmail = async (toEmail, userName = 'User', otp, purpose = 'verification') => {
   try {
@@ -323,11 +353,7 @@ export const sendOTPEmail = async (toEmail, userName = 'User', otp, purpose = 'v
 // ===========================
 /**
  * Sends a password reset email with a reset link.
- * @param {string} toEmail - Recipient email address
- * @param {string} [userName] - User's name (optional)
- * @param {string} token - Password reset token
- * @returns {Promise<void>}
- * @throws {Error} If inputs are invalid or email sending fails
+ * Uses RESET_TOKEN_EXPIRATION_MINUTES constant to explain link lifetime in the template.
  */
 export const sendResetPasswordEmail = async (toEmail, userName, token) => {
   try {
@@ -349,55 +375,6 @@ export const sendResetPasswordEmail = async (toEmail, userName, token) => {
       from: `"MicroCourse LMS" <${process.env.EMAIL_USER}>`,
       to: toEmail,
       subject: 'Reset Your Password – MicroCourse LMS',
-      html: `
-        <div style="font-family: Arial, sans-serif; color: #111827; max-width:600px;margin:auto;background:#fff;padding:24px;border-radius:8px;border:1px solid #eef2ff;">
-          <h1 style="color:#0f172a;">Reset Your Password</h1>
-          <p style="color:#374151;">Hello ${displayName},</p>
-          <p style="color:#374151;">
-            We received a request to reset your MicroCourse LMS password. Click the button below to set a new password. This link will expire in ${RESET_TOKEN_EXPIRATION_MINUTES} minutes.
-          </p>
-          <div style="text-align:center;margin:20px 0;">
-            <a href="${resetUrl}" style="background:#2563eb;color:#fff;padding:12px 20px;border-radius:6px;text-decoration:none;font-weight:600;">Reset Password</a>
-          </div>
-          <div style="background:#fff7ed;padding:12px;border-radius:6px;border-left:4px solid #ffb020;">
-            <p style="margin:0;color:#92400e;font-size:13px;"><strong>Important:</strong> If you did not request this, ignore this email.</p>
-          </div>
-        </div>
-      `,
-    };
-    await sendEmail(mailOptions);
-  } catch (error) {
-    console.error('Error sending password reset email:', error);
-    throw new Error(`Failed to send password reset email: ${error.message}`);
-  }
-};
-
-// ===========================
-// Account Activation Success Email
-// ===========================
-/**
- * Sends an account activation success email.
- * @param {string} toEmail - Recipient email address
- * @param {string} [userName] - User's name (optional)
- * @returns {Promise<void>}
- * @throws {Error} If inputs are invalid or email sending fails
- */
-export const sendAccountActivatedEmail = async (toEmail, userName) => {
-  try {
-    // Validate inputs
-    if (!toEmail || typeof toEmail !== 'string' || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(toEmail)) {
-      throw new Error('Invalid recipient email address');
-    }
-    if (userName && typeof userName !== 'string') {
-      throw new Error('Invalid user name: must be a string');
-    }
-
-    const displayName = userName || 'Learner';
-
-    const mailOptions = {
-      from: `"MicroCourse LMS" <${process.env.EMAIL_USER}>`,
-      to: toEmail,
-      subject: 'Account Activated – Welcome to MicroCourse LMS!',
       html: `
         <div style="font-family: Arial, sans-serif; color:#111827;max-width:600px;margin:auto;background:#fff;padding:24px;border-radius:10px;border:1px solid #eef2ff;">
           <div style="text-align: center; margin-bottom: 24px;">
