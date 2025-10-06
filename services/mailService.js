@@ -4,6 +4,7 @@
 import dotenv from 'dotenv';
 dotenv.config();
 import nodemailer from 'nodemailer';
+// no additional packages required — will use native fetch for Resend HTTP API when configured
 
 // --- Constants ---
 const RESET_TOKEN_EXPIRATION_MINUTES = 60; // Used in password reset email
@@ -47,6 +48,49 @@ const transporter = nodemailer.createTransport({
   }
 })();
 
+// --- Resend HTTP helper (if RESEND_API_KEY provided) ---
+/**
+ * Send email via Resend API (https://resend.com)
+ * @param {{from:string,to:string,subject:string,html:string}} mailOptions
+ */
+const sendViaResend = async (mailOptions) => {
+  const apiKey = process.env.RESEND_API_KEY;
+  if (!apiKey) throw new Error('RESEND_API_KEY not configured');
+
+  const payload = {
+    from: mailOptions.from || `"${process.env.MAIL_FROM_NAME || 'MicroCourse LMS'}" <${process.env.EMAIL_USER}>`,
+    to: mailOptions.to,
+    subject: mailOptions.subject,
+    html: mailOptions.html,
+  };
+
+  try {
+    const res = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify(payload),
+    });
+
+    if (!res.ok) {
+      const text = await res.text();
+      const err = new Error(`Resend API error: ${res.status} ${res.statusText}`);
+      err.status = res.status;
+      err.body = text;
+      throw err;
+    }
+
+    const data = await res.json();
+    console.log('Email sent via Resend, id=', data.id || data.messageId || '(unknown)');
+    return data;
+  } catch (err) {
+    console.error('Error sending via Resend:', err && (err.message || err));
+    throw err;
+  }
+};
+
 // --- General Send Email Function ---
 /**
  * Internal helper to send an email.
@@ -72,6 +116,11 @@ const sendEmail = async (mailOptions) => {
     }
     if (from && from !== `"MicroCourse LMS" <${process.env.EMAIL_USER}>`) {
       throw new Error('Invalid sender address');
+    }
+
+    // If RESEND_API_KEY is present, prefer Resend HTTP API
+    if (process.env.RESEND_API_KEY) {
+      return await sendViaResend(mailOptions);
     }
 
     // Use a small retry wrapper to handle transient network errors (ETIMEDOUT, ECONNRESET, etc.)
