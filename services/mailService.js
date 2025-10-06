@@ -3,198 +3,116 @@
 
 import nodemailer from 'nodemailer';
 import dotenv from 'dotenv';
+import { google } from 'googleapis';
 dotenv.config();
 
-// create & reuse a single transporter
-const transporter = nodemailer.createTransport({
-  host: process.env.SMTP_HOST || 'smtp.gmail.com',
-  port: parseInt(process.env.SMTP_PORT || '587', 10),
-  secure: process.env.SMTP_SECURE === 'true' || process.env.SMTP_PORT === '465',
-  auth: {
-    user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASSWORD
-  },
-  logger: true,
-  debug: false,
-  pool: true,                // reuse connections
-  maxConnections: 5,
-  rateLimit: true,
-  // increase internal timeouts to avoid quick failures
-  connectionTimeout: parseInt(process.env.SMTP_CONNECTION_TIMEOUT || '20000', 10),
-  greetingTimeout: parseInt(process.env.SMTP_GREETING_TIMEOUT || '20000', 10),
-  socketTimeout: parseInt(process.env.SMTP_SOCKET_TIMEOUT || '20000', 10)
-});
+const CONNECTION_TIMEOUT = parseInt(process.env.SMTP_CONNECTION_TIMEOUT || '60000', 10);
+const GREETING_TIMEOUT = parseInt(process.env.SMTP_GREETING_TIMEOUT || '60000', 10);
+const SOCKET_TIMEOUT = parseInt(process.env.SMTP_SOCKET_TIMEOUT || '60000', 10);
+const MAIL_SEND_TIMEOUT = parseInt(process.env.MAIL_SEND_TIMEOUT || '30000', 10);
+const MAX_SEND_ATTEMPTS = parseInt(process.env.MAIL_SEND_ATTEMPTS || '3', 10);
 
-// verify once at startup
-transporter.verify()
-  .then(() => console.log('[MAILER] SMTP verified'))
-  .catch((err) => console.error('[MAILER] SMTP verify failed', err));
+let transporter = null;
 
-// helper: send mail with configurable Promise timeout
-async function sendMailWithTimeout(mailOptions, opts = {}) {
-  const timeoutMs = parseInt(process.env.MAIL_SEND_TIMEOUT || '20000', 10); // default 20s
-  const attemptSend = async () => {
-    return transporter.sendMail(mailOptions);
-  };
+function createTransporter() {
+  // prefer SendGrid (HTTP) if API key present
+  if (process.env.SENDGRID_API_KEY) {
+    console.log('[MAILER] Using SendGrid HTTP API (SENDGRID_API_KEY present)');
+    return null; // handled in send path
+  }
 
-  // simple single-attempt with timeout
-  const timeoutPromise = new Promise((_, reject) =>
-    setTimeout(() => reject(new Error(`Email timeout after ${timeoutMs}ms`)), timeoutMs)
-  );
+  const useOAuth = process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET && process.env.GOOGLE_REFRESH_TOKEN && process.env.EMAIL_USER;
 
-  return Promise.race([attemptSend(), timeoutPromise]);
+  if (useOAuth) {
+    const oAuth2Client = new google.auth.OAuth2(process.env.GOOGLE_CLIENT_ID, process.env.GOOGLE_CLIENT_SECRET);
+    oAuth2Client.setCredentials({ refresh_token: process.env.GOOGLE_REFRESH_TOKEN });
+    return nodemailer.createTransport({
+      service: 'gmail',
+      auth: { type: 'OAuth2', user: process.env.EMAIL_USER, clientId: process.env.GOOGLE_CLIENT_ID, clientSecret: process.env.GOOGLE_CLIENT_SECRET, refreshToken: process.env.GOOGLE_REFRESH_TOKEN },
+      logger: false,
+      pool: false,
+      connectionTimeout: CONNECTION_TIMEOUT,
+      greetingTimeout: GREETING_TIMEOUT,
+      socketTimeout: SOCKET_TIMEOUT
+    });
+  }
+
+  return nodemailer.createTransport({
+    host: process.env.SMTP_HOST || 'smtp.gmail.com',
+    port: parseInt(process.env.SMTP_PORT || '587', 10),
+    secure: (process.env.SMTP_SECURE === 'true' || process.env.SMTP_PORT === '465'),
+    auth: { user: process.env.EMAIL_USER, pass: process.env.EMAIL_PASSWORD },
+    logger: false,
+    pool: false, // IMPORTANT: disable pool on Render
+    connectionTimeout: CONNECTION_TIMEOUT,
+    greetingTimeout: GREETING_TIMEOUT,
+    socketTimeout: SOCKET_TIMEOUT
+  });
 }
 
-/**
- * Send OTP via email
- */
-export const sendOTPEmail = async (email, otp, purpose = 'verification') => {
-  try {
-    const emailUser = process.env.SMTP_USER || process.env.EMAIL_USER;
-    const emailPass = process.env.SMTP_PASS || process.env.EMAIL_PASSWORD;
-    
-    if (!emailUser || !emailPass) {
-      console.warn('⚠️  Email configuration not set. OTP:', otp);
-      console.log(`📧 [DEV MODE] Email OTP for ${email}: ${otp}`);
-      return { success: true, message: 'Email not configured (dev mode)' };
-    }
+transporter = createTransporter();
+if (transporter) {
+  transporter.verify().then(() => console.log('[MAILER] SMTP verified')).catch(err => console.warn('[MAILER] SMTP verify failed', err && err.code ? err.code : err.message || err));
+} else {
+  console.log('[MAILER] Transporter skipped (SendGrid HTTP will be used)');
+}
 
-    let subject = '';
-    let text = '';
+function isTransient(err) {
+  const codes = ['ETIMEDOUT', 'ECONNRESET', 'EAI_AGAIN', 'ECONNREFUSED', 'ENOTFOUND'];
+  return err && (codes.includes(err.code) || /timeout|socket|connection/i.test(err.message || ''));
+}
 
-    switch (purpose) {
-      case 'registration':
-        subject = 'Verify Your Email - OTP Code';
-        text = `Your OTP code for registration is: ${otp}\n\nThis code will expire in ${process.env.OTP_EXPIRY_MINUTES || 10} minutes.\n\nIf you didn't request this code, please ignore this email.`;
-        break;
-      case 'password_reset':
-        subject = 'Password Reset - OTP Code';
-        text = `Your OTP code for password reset is: ${otp}\n\nThis code will expire in ${process.env.OTP_EXPIRY_MINUTES || 10} minutes.\n\nIf you didn't request this code, please contact support immediately.`;
-        break;
-      case 'email_change':
-        subject = 'Email Change Verification - OTP Code';
-        text = `Your OTP code for email change is: ${otp}\n\nThis code will expire in ${process.env.OTP_EXPIRY_MINUTES || 10} minutes.\n\nIf you didn't request this code, please contact support immediately.`;
-        break;
-      default:
-        subject = 'Verification Code';
-        text = `Your verification code is: ${otp}\n\nThis code will expire in ${process.env.OTP_EXPIRY_MINUTES || 10} minutes.`;
-    }
+async function sendViaSendGrid(mailOptions) {
+  // lightweight HTTP fallback using fetch
+  // install: npm install @sendgrid/mail and set SENDGRID_API_KEY
+  const sg = await import('@sendgrid/mail').then(m => m.default || m);
+  sg.setApiKey(process.env.SENDGRID_API_KEY);
+  const msg = {
+    to: mailOptions.to,
+    from: process.env.EMAIL_FROM || process.env.EMAIL_USER,
+    subject: mailOptions.subject,
+    text: mailOptions.text,
+    html: mailOptions.html
+  };
+  const res = await sg.send(msg);
+  return { messageId: (res && res[0] && res[0].headers && res[0].headers['x-message-id']) || null, raw: res };
+}
 
-    const mailOptions = {
-      from: process.env.SMTP_FROM || process.env.EMAIL_FROM || process.env.SMTP_USER || process.env.EMAIL_USER,
-      to: email,
-      subject,
-      text,
-      html: `
-        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-          <h2 style="color: #333;">${subject}</h2>
-          <p style="font-size: 16px; color: #666;">Your verification code is:</p>
-          <div style="background-color: #f4f4f4; padding: 20px; text-align: center; border-radius: 5px; margin: 20px 0;">
-            <h1 style="color: #4CAF50; font-size: 32px; margin: 0; letter-spacing: 5px;">${otp}</h1>
-          </div>
-          <p style="font-size: 14px; color: #999;">This code will expire in ${process.env.OTP_EXPIRY_MINUTES || 10} minutes.</p>
-          <p style="font-size: 14px; color: #999;">If you didn't request this code, please ignore this email.</p>
-        </div>
-      `,
-    };
-
-    await sendMailWithTimeout(mailOptions);
-    console.log(`✅ OTP email sent successfully to ${email}`);
-    return { success: true };
-  } catch (error) {
-    console.error('❌ Error sending OTP email:', error);
-    console.log(`📧 [FALLBACK] OTP for ${email}: ${otp}`);
-    return { success: false, error: error.message };
+async function sendAttempt(mailOptions) {
+  if (process.env.SENDGRID_API_KEY) {
+    console.log('[MAILER] sendAttempt -> SendGrid');
+    return sendViaSendGrid(mailOptions);
   }
-};
+  // envelope ensures MAIL FROM equals authenticated user
+  const envelope = { from: process.env.EMAIL_FROM || process.env.EMAIL_USER, to: mailOptions.to };
+  const sendPromise = transporter.sendMail({ ...mailOptions, envelope });
+  const timeout = new Promise((_, rej) => setTimeout(() => rej(new Error(`Email timeout after ${MAIL_SEND_TIMEOUT}ms`)), MAIL_SEND_TIMEOUT));
+  return Promise.race([sendPromise, timeout]);
+}
 
-/**
- * Send verification email with link and OTP
- */
-export const sendVerificationEmail = async (email, otp = null, userName = 'User') => {
-  try {
-    const emailUser = process.env.SMTP_USER || process.env.EMAIL_USER;
-    const emailPass = process.env.SMTP_PASS || process.env.EMAIL_PASSWORD;
-    
-    if (!emailUser || !emailPass) {
-      console.warn('⚠️  Email configuration not set.');
-      console.log(`📧 [DEV MODE] Verification link: ${verificationLink || '<link>'}`);
-      if (otp) console.log(`📧 [DEV MODE] OTP: ${otp}`);
-      return { success: true, message: 'Email not configured (dev mode)' };
+export async function sendVerificationEmail(to, otp, name = 'User') {
+  const mailOptions = { from: process.env.EMAIL_FROM || process.env.EMAIL_USER, to, subject: 'Your verification code', text: `OTP: ${otp}`, html: `<p>Your OTP: <b>${otp}</b></p>` };
+
+  for (let i = 1; i <= MAX_SEND_ATTEMPTS; i++) {
+    try {
+      console.log(`[MAILER] attempt ${i} -> sending to ${to}`);
+      const info = await sendAttempt(mailOptions);
+      console.log('[MAILER] sent:', info && info.messageId ? info.messageId : info);
+      return { success: true, messageId: info?.messageId || null };
+    } catch (err) {
+      console.error(`[MAILER] attempt ${i} failed:`, err && err.code ? err.code : err.message || err);
+      if (i === MAX_SEND_ATTEMPTS || !isTransient(err)) {
+        console.log(`[MAILER] fallback OTP for ${to}: ${otp}`);
+        return { success: false, error: err?.message || String(err) };
+      }
+      await new Promise(r => setTimeout(r, Math.min(500 * 2 ** (i - 1), 5000)));
     }
-
-    const mailOptions = {
-      from: process.env.SMTP_FROM || process.env.EMAIL_FROM || emailUser,
-      to: email,
-      subject: 'Your verification code - LMS',
-      html: `
-        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-          <div style="background-color: white; padding: 30px; border-radius: 10px; box-shadow: 0 2px 4px rgba(0,0,0,0.05);">
-            <h2 style="color: #333; margin-bottom: 10px;">Hello ${userName},</h2>
-            <p style="font-size: 15px; color: #666;">Use the following one-time code to verify your email address:</p>
-            ${otp ? `
-            <div style="background-color: #f7fafc; padding: 18px; text-align: center; border-radius: 8px; margin: 20px 0;">
-              <h1 style="color: #111827; font-size: 34px; margin: 0; letter-spacing: 6px; font-weight: 700;">${otp}</h1>
-              <p style="font-size: 12px; color: #9ca3af; margin-top: 8px;">Expires in ${process.env.OTP_EXPIRY_MINUTES || 10} minutes</p>
-            </div>
-            ` : ''}
-            <p style="font-size: 13px; color: #777; margin-top: 10px;">If you didn't request this, please ignore this message.</p>
-          </div>
-          <div style="text-align: center; margin-top: 18px; color: #9ca3af; font-size: 12px;">
-            <p>© ${new Date().getFullYear()} LMS</p>
-          </div>
-        </div>
-      `,
-    };
-
-    // configurable timeout
-    const timeoutMs = parseInt(process.env.MAIL_SEND_TIMEOUT || (process.env.NODE_ENV === 'production' ? '20000' : '10000'), 10);
-    await sendMailWithTimeout(mailOptions, { timeoutMs });
-
-    console.log(`✅ Verification email sent successfully to ${email}`);
-    return { success: true };
-  } catch (error) {
-    console.error('❌ Error sending verification email:', error);
-    if (otp) console.log(`📧 [FALLBACK] OTP for ${email}: ${otp}`);
-    return { success: false, error: error.message };
   }
-};
+  return { success: false, error: 'unknown' };
+}
 
-/**
- * Send welcome email
- */
-export const sendWelcomeEmail = async (email, name) => {
-  try {
-    const emailUser = process.env.SMTP_USER || process.env.EMAIL_USER;
-    const emailPass = process.env.SMTP_PASS || process.env.EMAIL_PASSWORD;
-    
-    if (!emailUser || !emailPass) {
-      console.warn('Email configuration not set.');
-      return { success: true, message: 'Email not configured (dev mode)' };
-    }
-
-    const mailOptions = {
-      from: process.env.EMAIL_FROM || emailUser,
-      to: email,
-      subject: 'Welcome to Our Platform!',
-      html: `
-        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-          <h2 style="color: #333;">Welcome ${name || 'User'}!</h2>
-          <p style="font-size: 16px; color: #666;">Thank you for joining our platform. We're excited to have you on board!</p>
-          <p style="font-size: 14px; color: #999;">If you have any questions, feel free to contact our support team.</p>
-        </div>
-      `,
-    };
-
-    const timeoutMs = parseInt(process.env.MAIL_SEND_TIMEOUT || (process.env.NODE_ENV === 'production' ? '20000' : '10000'), 10);
-    await sendMailWithTimeout(mailOptions, { timeoutMs });
-
-    console.log(`Welcome email sent to ${email}`);
-    return { success: true };
-  } catch (error) {
-    console.error('Error sending welcome email:', error);
-    return { success: false, error: error.message };
-  }
-};
+export async function sendWelcomeEmail(to, name) {
+  return sendVerificationEmail(to, null, name);
+}
 
 export default transporter;
