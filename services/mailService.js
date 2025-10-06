@@ -98,3 +98,8 @@ export async function sendWelcomeEmail(to, name) {
 }
 
 export default transporter;
+
+// add this alias so existing imports keep working
+export async function sendOTPEmail(to, otp, name = 'User') {
+  return sendVerificationEmail(to, otp, name);
+}
