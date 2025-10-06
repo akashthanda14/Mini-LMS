@@ -39,6 +39,10 @@ model User {
   lastLoginAt          DateTime?
   avatar               String?              @db.VarChar(500)
   bio                  String?
+  googleId             String?              @unique @db.VarChar(255)
+  googleAvatar         String?              @db.VarChar(500)
+  googleAccessToken    String?              @db.VarChar(500)
+  googleRefreshToken   String?              @db.VarChar(500)
   certificates         Certificate[]
   coursesCreated       Course[]             @relation("CourseCreator")
   coursesReviewed      Course[]             @relation("CourseReviewer")
