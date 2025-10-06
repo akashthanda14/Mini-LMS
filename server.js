@@ -13,6 +13,7 @@ import { requestLogger, errorLogger } from './middleware/requestLogger.js';
 // Import authentication routes
 import userAuthRoutes from './routes/userRoutes.js';
 import authRoutes from './routes/authRoutes.js';
+import googleAuthRoutes from './routes/googleAuthRoutes.js';
 import creatorRoutes from './routes/creatorRoutes.js';
 import adminApplicationRoutes from './routes/adminApplicationRoutes.js';
 import courseRoutes from './routes/courseRoutes.js';
@@ -47,6 +48,14 @@ app.use(cors(corsOptions));
 // Body parsing middleware
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
+// Initialize passport and session for OAuth
+import session from 'express-session';
+import passport from 'passport';
+import './config/passport.js';
+app.use(session({ secret: process.env.SESSION_SECRET || 'change-me', resave: false, saveUninitialized: false }));
+app.use(passport.initialize());
+app.use(passport.session());
 
 // Request logging middleware (Winston)
 app.use(requestLogger);

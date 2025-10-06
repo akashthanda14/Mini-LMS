@@ -49,7 +49,7 @@ You are tasked with implementing Google OAuth2 authentication using Passport.js 
 - Test 1: New user signs up via Google OAuth - Verify user created in DB with Google ID, email verified, JWT returned, redirect to profile completion if needed.
 - Test 2: Existing user logs in via Google OAuth - Verify account linked, JWT returned, no duplicate creation.
 - Test 3: OAuth failure (e.g., invalid credentials) - Redirect to failure page with error message.
-- Test 4: Integration with existing login - Ensure email/phone login still works, no conflicts.
+- Test 4: Integration with existing login - Ensure email login still works, no conflicts.
 - Test 5: Token validation - Verify JWT contains correct user data and is valid.
 - Use tools like Supertest for API tests, and simulate OAuth with mock tokens if needed.
 

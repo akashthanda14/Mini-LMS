@@ -1,3 +1,29 @@
+import passport from 'passport';
+import { createAuthToken } from '../services/tokenService.js';
+
+export const googleAuth = passport.authenticate('google', { scope: ['profile', 'email'], prompt: 'select_account' });
+
+export const googleCallback = [
+  passport.authenticate('google', { session: true, failureRedirect: `${process.env.FRONTEND_URL || '/'}?auth=failed` }),
+  (req, res) => {
+    try {
+      const user = req.user;
+      const token = createAuthToken({ userId: user.id, email: user.email, role: user.role });
+
+      if (process.env.NODE_ENV === 'production') {
+        res.cookie('token', token, { httpOnly: true, secure: true, sameSite: 'lax', maxAge: 7 * 24 * 60 * 60 * 1000 });
+        return res.redirect(process.env.FRONTEND_URL || '/');
+      }
+
+      return res.json({ success: true, token, user });
+    } catch (err) {
+      console.error('Google callback error:', err);
+      return res.status(500).json({ success: false, error: 'Authentication failed' });
+    }
+  }
+];
+
+export const googleFailure = (req, res) => res.status(401).json({ success: false, error: 'Google authentication failed' });
 // user_modules/controllers/authController.js
 // Authentication controller for user registration, login, and password management
 
