@@ -2,24 +2,48 @@
 // Email service for sending verification emails and OTPs
 
 import nodemailer from 'nodemailer';
+import dotenv from 'dotenv';
+dotenv.config();
 
-// Create reusable transporter
-let transporter = null;
+// create & reuse a single transporter
+const transporter = nodemailer.createTransport({
+  host: process.env.SMTP_HOST || 'smtp.gmail.com',
+  port: parseInt(process.env.SMTP_PORT || '587', 10),
+  secure: process.env.SMTP_SECURE === 'true' || process.env.SMTP_PORT === '465',
+  auth: {
+    user: process.env.EMAIL_USER,
+    pass: process.env.EMAIL_PASSWORD
+  },
+  logger: true,
+  debug: false,
+  pool: true,                // reuse connections
+  maxConnections: 5,
+  rateLimit: true,
+  // increase internal timeouts to avoid quick failures
+  connectionTimeout: parseInt(process.env.SMTP_CONNECTION_TIMEOUT || '20000', 10),
+  greetingTimeout: parseInt(process.env.SMTP_GREETING_TIMEOUT || '20000', 10),
+  socketTimeout: parseInt(process.env.SMTP_SOCKET_TIMEOUT || '20000', 10)
+});
 
-const getTransporter = () => {
-  if (!transporter) {
-    transporter = nodemailer.createTransport({
-      host: process.env.SMTP_HOST || process.env.EMAIL_HOST || 'smtp.gmail.com',
-      port: parseInt(process.env.SMTP_PORT || process.env.EMAIL_PORT) || 587,
-      secure: process.env.EMAIL_SECURE === 'true',
-      auth: {
-        user: process.env.SMTP_USER || process.env.EMAIL_USER,
-        pass: process.env.SMTP_PASS || process.env.EMAIL_PASSWORD,
-      },
-    });
-  }
-  return transporter;
-};
+// verify once at startup
+transporter.verify()
+  .then(() => console.log('[MAILER] SMTP verified'))
+  .catch((err) => console.error('[MAILER] SMTP verify failed', err));
+
+// helper: send mail with configurable Promise timeout
+async function sendMailWithTimeout(mailOptions, opts = {}) {
+  const timeoutMs = parseInt(process.env.MAIL_SEND_TIMEOUT || '20000', 10); // default 20s
+  const attemptSend = async () => {
+    return transporter.sendMail(mailOptions);
+  };
+
+  // simple single-attempt with timeout
+  const timeoutPromise = new Promise((_, reject) =>
+    setTimeout(() => reject(new Error(`Email timeout after ${timeoutMs}ms`)), timeoutMs)
+  );
+
+  return Promise.race([attemptSend(), timeoutPromise]);
+}
 
 /**
  * Send OTP via email
@@ -34,8 +58,6 @@ export const sendOTPEmail = async (email, otp, purpose = 'verification') => {
       console.log(`📧 [DEV MODE] Email OTP for ${email}: ${otp}`);
       return { success: true, message: 'Email not configured (dev mode)' };
     }
-
-    const transport = getTransporter();
 
     let subject = '';
     let text = '';
@@ -76,7 +98,7 @@ export const sendOTPEmail = async (email, otp, purpose = 'verification') => {
       `,
     };
 
-    await transport.sendMail(mailOptions);
+    await sendMailWithTimeout(mailOptions);
     console.log(`✅ OTP email sent successfully to ${email}`);
     return { success: true };
   } catch (error) {
@@ -100,8 +122,6 @@ export const sendVerificationEmail = async (email, otp = null, userName = 'User'
       if (otp) console.log(`📧 [DEV MODE] OTP: ${otp}`);
       return { success: true, message: 'Email not configured (dev mode)' };
     }
-
-    const transport = getTransporter();
 
     const mailOptions = {
       from: process.env.SMTP_FROM || process.env.EMAIL_FROM || emailUser,
@@ -157,8 +177,6 @@ export const sendWelcomeEmail = async (email, name) => {
       return { success: true, message: 'Email not configured (dev mode)' };
     }
 
-    const transport = getTransporter();
-
     const mailOptions = {
       from: process.env.EMAIL_FROM || process.env.EMAIL_USER,
       to: email,
@@ -181,8 +199,4 @@ export const sendWelcomeEmail = async (email, name) => {
   }
 };
 
-export default {
-  sendOTPEmail,
-  sendVerificationEmail,
-  sendWelcomeEmail,
-};
+export default transporter;
