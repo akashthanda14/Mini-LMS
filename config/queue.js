@@ -3,11 +3,17 @@ import IORedis from 'ioredis';
 import logger from './logger.js';
 
 // Create Redis connection for BullMQ
+// Safe Redis connection values with sensible defaults to avoid runtime errors
+const redisHost = process.env.REDIS_HOST || '127.0.0.1';
+const redisPort = Number(process.env.REDIS_PORT) || 6379;
+const redisUsername = process.env.REDIS_USERNAME || undefined;
+const redisPassword = process.env.REDIS_PASSWORD || undefined;
+
 const redisConnection = new IORedis({
-  host: process.env.REDIS_HOST,
-  port: parseInt(process.env.REDIS_PORT),
-  username: process.env.REDIS_USERNAME,
-  password: process.env.REDIS_PASSWORD,
+  host: redisHost,
+  port: redisPort,
+  username: redisUsername,
+  password: redisPassword,
   maxRetriesPerRequest: null,
   enableReadyCheck: false,
   retryStrategy(times) {

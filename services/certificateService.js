@@ -97,44 +97,72 @@ export const generateCertificate = async (enrollmentId) => {
       throw new Error('Certificate serial hash collision');
     }
 
-    // Create certificate record
-    const certificate = await prisma.certificate.create({
-      data: {
-        enrollmentId,
-        userId: enrollment.userId,
-        courseId: enrollment.courseId,
-        serialHash,
-        issuedAt: new Date()
-      },
-      include: {
-        enrollment: {
-          include: {
-            user: {
-              select: {
-                id: true,
-                name: true,
-                email: true
-              }
-            },
-            course: {
-              select: {
-                id: true,
-                title: true,
-                description: true,
-                level: true,
-                category: true,
-                duration: true,
-                creator: {
-                  select: {
-                    name: true
+    // Create certificate record. Handle unique constraint race (another worker/manual script may have created it)
+    let certificate;
+    try {
+      certificate = await prisma.certificate.create({
+        data: {
+          enrollmentId,
+          userId: enrollment.userId,
+          courseId: enrollment.courseId,
+          serialHash,
+          issuedAt: new Date()
+        },
+        include: {
+          enrollment: {
+            include: {
+              user: {
+                select: {
+                  id: true,
+                  name: true,
+                  email: true
+                }
+              },
+              course: {
+                select: {
+                  id: true,
+                  title: true,
+                  description: true,
+                  level: true,
+                  category: true,
+                  duration: true,
+                  creator: {
+                    select: {
+                      name: true
+                    }
                   }
                 }
               }
             }
           }
         }
+      });
+    } catch (err) {
+      // Prisma unique constraint error code P2002 indicates another record exists with same unique field
+      if (err?.code === 'P2002') {
+        logger.warn('Certificate already created by another process; fetching existing record', {
+          enrollmentId,
+          serialHash
+        });
+        certificate = await prisma.certificate.findUnique({
+          where: { enrollmentId },
+          include: {
+            enrollment: {
+              include: {
+                user: { select: { id: true, name: true, email: true } },
+                course: { select: { id: true, title: true, level: true, category: true, duration: true, creator: { select: { name: true } } } }
+              }
+            }
+          }
+        });
+
+        if (certificate) return certificate;
+        // if still not found, rethrow the original error to surface unexpected state
+        throw err;
       }
-    });
+
+      throw err;
+    }
 
     logger.info('Certificate generated successfully', {
       enrollmentId,

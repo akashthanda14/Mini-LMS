@@ -6,9 +6,17 @@ dotenv.config();
 
 import { generateCertificate } from '../services/certificateService.js';
 
-const enrollmentId = '249615e3-3cd4-4bab-81ca-0e1645ebd2f7';
+// Usage:
+//   node scripts/manual-certificate-gen.js <enrollmentId>
+// If no enrollmentId is provided, the script will exit with usage instructions.
+const enrollmentId = process.argv[2];
 
-console.log('Generating certificate...');
+if (!enrollmentId) {
+  console.error('Usage: node scripts/manual-certificate-gen.js <enrollmentId>');
+  process.exit(2);
+}
+
+console.log(`Generating certificate for enrollment ${enrollmentId}...`);
 try {
   const certificate = await generateCertificate(enrollmentId);
   console.log('✅ Certificate generated successfully!');
@@ -17,6 +25,8 @@ try {
   console.log(`   Issued At: ${certificate.issuedAt}`);
 } catch (error) {
   console.error('❌ Error:', error.message);
+  if (error.stack) console.error(error.stack);
+  process.exitCode = 1;
 }
 
 process.exit(0);

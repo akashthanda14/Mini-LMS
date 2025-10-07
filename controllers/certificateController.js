@@ -7,8 +7,11 @@ import {
   generateCertificatePDF,
   getUserCertificates
 } from '../services/certificateService.js';
+import prisma from '../lib/prisma.js';
 import logger from '../config/logger.js';
 import PDFDocument from 'pdfkit';
+import { queueCertificateGeneration } from '../config/queue.js';
+import { getEnrollmentById } from '../services/enrollmentService.js';
 
 /**
  * Get certificate for enrollment
@@ -23,6 +26,36 @@ export const getEnrollmentCertificate = async (req, res) => {
     const certificate = await getCertificateByEnrollment(enrollmentId);
 
     if (!certificate) {
+      // Provide extra debug info when requested so the frontend can surface useful error details.
+      const debugRequested = req.query.debug === '1' || process.env.DEBUG_API === 'true' || process.env.NODE_ENV !== 'production';
+
+      if (debugRequested) {
+        // Try to fetch enrollment state to explain why certificate is missing
+        const enrollment = await prisma.enrollment.findUnique({
+          where: { id: enrollmentId },
+          include: {
+            user: { select: { id: true, name: true, email: true } },
+            course: { select: { id: true, title: true } },
+            certificate: true
+          }
+        });
+
+        return res.status(404).json({
+          success: false,
+          message: 'Certificate not found - debug info included',
+          debug: {
+            enrollmentExists: !!enrollment,
+            enrollmentId: enrollment ? enrollment.id : null,
+            userId: enrollment?.user?.id || null,
+            courseId: enrollment?.course?.id || null,
+            progress: enrollment?.progress ?? null,
+            completedAt: enrollment?.completedAt ?? null,
+            certificateRecordExists: !!enrollment?.certificate,
+            note: 'If progress < 100 or completedAt is null, the certificate will not be generated. If certificateRecordExists is false but progress===100, check worker/queue logs.'
+          }
+        });
+      }
+
       return res.status(404).json({
         success: false,
         message: 'Certificate not found - course may not be completed yet'
@@ -84,13 +117,66 @@ export const getEnrollmentCertificate = async (req, res) => {
       userId: req.user?.id,
       error: error.message
     });
-
-    res.status(500).json({
+    // Provide additional debug information when requested via query or enabled in non-production
+    const showDebug = req.query?.debug === '1' || process.env.DEBUG_API === 'true' || process.env.NODE_ENV !== 'production';
+    const payload = {
       success: false,
       message: 'Internal server error'
-    });
+    };
+    if (showDebug) {
+      payload.error = {
+        message: error.message,
+        stack: (error.stack || '').split('\n').slice(0, 5)
+      };
+    }
+    res.status(500).json(payload);
   }
 };
+
+  /**
+   * Trigger certificate generation (async)
+   * POST /enrollments/:id/certificate/generate
+   * Requires auth and enrollment ownership
+   */
+  export const triggerCertificateGeneration = async (req, res) => {
+    try {
+      const { id: enrollmentId } = req.params;
+      const userId = req.user.id;
+
+      // Ensure enrollment exists and belongs to user
+      const enrollment = await getEnrollmentById(enrollmentId);
+      if (!enrollment) {
+        return res.status(404).json({ success: false, message: 'Enrollment not found' });
+      }
+      if (enrollment.userId !== userId) {
+        return res.status(403).json({ success: false, message: 'Access denied' });
+      }
+
+      // If certificate already exists, return it immediately
+      const existingCert = await getCertificateByEnrollment(enrollmentId);
+      if (existingCert) {
+        return res.status(200).json({
+          success: true,
+          message: 'Certificate already exists',
+          data: {
+            certificate: {
+              id: existingCert.id,
+              serialHash: existingCert.serialHash,
+              issuedAt: existingCert.issuedAt
+            }
+          }
+        });
+      }
+
+      // Queue certificate generation and return 202 Accepted
+      await queueCertificateGeneration(enrollmentId);
+      logger.info('Certificate generation queued via API', { enrollmentId, userId });
+      return res.status(202).json({ success: true, message: 'Certificate generation queued' });
+    } catch (error) {
+      logger.error('Trigger certificate generation error', { enrollmentId: req.params.id, userId: req.user?.id, error: error.message });
+      return res.status(500).json({ success: false, message: 'Internal server error' });
+    }
+  };
 
 /**
  * Verify certificate by serial hash
@@ -127,11 +213,18 @@ export const verifyCertificateByHash = async (req, res) => {
       serialHash: req.params.serialHash,
       error: error.message
     });
-
-    res.status(500).json({
+    const showDebug = req.query?.debug === '1' || process.env.DEBUG_API === 'true' || process.env.NODE_ENV !== 'production';
+    const payload = {
       success: false,
       message: 'Internal server error'
-    });
+    };
+    if (showDebug) {
+      payload.error = {
+        message: error.message,
+        stack: (error.stack || '').split('\n').slice(0, 5)
+      };
+    }
+    res.status(500).json(payload);
   }
 };
 
@@ -185,11 +278,18 @@ export const getUserCertificatesList = async (req, res) => {
       userId: req.user?.id,
       error: error.message
     });
-
-    res.status(500).json({
+    const showDebug = req.query?.debug === '1' || process.env.DEBUG_API === 'true' || process.env.NODE_ENV !== 'production';
+    const payload = {
       success: false,
       message: 'Internal server error'
-    });
+    };
+    if (showDebug) {
+      payload.error = {
+        message: error.message,
+        stack: (error.stack || '').split('\n').slice(0, 5)
+      };
+    }
+    res.status(500).json(payload);
   }
 };
 
@@ -279,10 +379,17 @@ export const downloadCertificatePDF = async (req, res) => {
       userId: req.user?.id,
       error: error.message
     });
-
-    res.status(500).json({
+    const showDebug = req.query?.debug === '1' || process.env.DEBUG_API === 'true' || process.env.NODE_ENV !== 'production';
+    const payload = {
       success: false,
       message: 'Internal server error'
-    });
+    };
+    if (showDebug) {
+      payload.error = {
+        message: error.message,
+        stack: (error.stack || '').split('\n').slice(0, 5)
+      };
+    }
+    res.status(500).json(payload);
   }
 };
