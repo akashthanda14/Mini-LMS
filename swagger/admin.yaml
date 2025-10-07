@@ -1,15 +1,152 @@
-openapi: 3.0.0
+openapi: 3.0.3
 info:
-  title: LMS Authentication API - Admin
+  title: MicroCourse LMS API
   version: 1.0.0
+  description: "Complete OpenAPI spec covering controllers..."
+servers:
+  - url: https://mini-lms-ghro.onrender.com
+    description: Production (Render)
+  - url: http://localhost:4000
+    description: Local dev
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    Error:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: false
+        message:
+          type: string
+    Success:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        message:
+          type: string
+    User:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        email:
+          type: string
+          format: email
+        role:
+          type: string
+    Course:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        description:
+          type: string
+        instructor:
+          type: string
+    Lesson:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        content:
+          type: string
+    Enrollment:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        userId:
+          type: string
+          format: uuid
+        courseId:
+          type: string
+          format: uuid
+        progress:
+          type: integer
+        enrolledAt:
+          type: string
+          format: date-time
+        completedAt:
+          type: string
+          format: date-time
+    Certificate:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        enrollmentId:
+          type: string
+          format: uuid
+        userId:
+          type: string
+          format: uuid
+        courseId:
+          type: string
+          format: uuid
+        serialHash:
+          type: string
+        serialNumber:
+          type: string
+        imageUrl:
+          type: string
+          format: uri
+        pdfUrl:
+          type: string
+          format: uri
+        issuedAt:
+          type: string
+          format: date-time
 
 paths:
+  /health:
+    get:
+      tags:
+        - Health
+      summary: Health check
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: OK
+
+  /api:
+    get:
+      tags:
+        - Health
+      summary: API info
+      responses:
+        '200':
+          description: API info
+
   /api/admin-auth/login:
     post:
       tags:
         - Admin
       summary: Admin login
-      description: Login as admin using credentials from environment variables
       requestBody:
         required: true
         content:
@@ -23,13 +160,8 @@ paths:
                 email:
                   type: string
                   format: email
-                  example: admin@example.com
-                  description: Admin email (configured in .env)
                 password:
                   type: string
-                  format: password
-                  example: admin123
-                  description: Admin password (configured in .env)
       responses:
         '200':
           description: Admin login successful
@@ -37,54 +169,777 @@ paths:
             application/json:
               schema:
                 type: object
-                properties:
-                  success:
-                    type: boolean
-                    example: true
-                  message:
-                    type: string
-                    example: Admin login successful
-                  token:
-                    type: string
-                    description: JWT authentication token with admin privileges
-                  user:
-                    type: object
-                    properties:
-                      id:
-                        type: string
-                        format: uuid
-                      name:
-                        type: string
-                        example: Admin
-                      email:
-                        type: string
-                        example: admin@example.com
-                      role:
-                        type: string
-                        example: ADMIN
-        '401':
-          description: Invalid admin credentials
+
+  /api/user-auth/register:
+    post:
+      tags:
+        - Authentication
+      summary: Register new user (email or phone)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              oneOf:
+                - required: [email]
+                - required: [phoneNumber]
+              properties:
+                email:
+                  type: string
+                  format: email
+                phoneNumber:
+                  type: string
+      responses:
+        '200':
+          description: Registration accepted
+
+  /api/user-auth/verify-email:
+    post:
+      tags:
+        - Authentication
+      summary: Verify email OTP
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, otp]
+              properties:
+                email:
+                  type: string
+                otp:
+                  type: string
+      responses:
+        '200':
+          description: Email verified
+
+  /api/user-auth/verify-phone:
+    post:
+      tags:
+        - Authentication
+      summary: Verify phone OTP
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [phoneNumber, otp]
+              properties:
+                phoneNumber:
+                  type: string
+                otp:
+                  type: string
+      responses:
+        '200':
+          description: Phone verified
+
+  /api/user-auth/complete-profile:
+    post:
+      tags:
+        - Authentication
+      summary: Complete profile (set name/password)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [userId, name, password]
+              properties:
+                userId:
+                  type: string
+                name:
+                  type: string
+                password:
+                  type: string
+      responses:
+        '200':
+          description: Profile completed
+
+  /api/user-auth/login:
+    post:
+      tags:
+        - Authentication
+      summary: Login
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [emailOrPhone, password]
+              properties:
+                emailOrPhone:
+                  type: string
+                password:
+                  type: string
+      responses:
+        '200':
+          description: Login successful
+
+  /api/user-auth/forgot-password:
+    post:
+      tags:
+        - Authentication
+      summary: Request password reset OTP
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              oneOf:
+                - required: [email]
+                - required: [phoneNumber]
+              properties:
+                email:
+                  type: string
+                phoneNumber:
+                  type: string
+      responses:
+        '200':
+          description: OTP sent
+
+  /api/user-auth/reset-password:
+    post:
+      tags:
+        - Authentication
+      summary: Reset password using OTP
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [otp, newPassword]
+              properties:
+                email:
+                  type: string
+                phoneNumber:
+                  type: string
+                otp:
+                  type: string
+                newPassword:
+                  type: string
+      responses:
+        '200':
+          description: Password reset
+
+  /api/user-auth/resend-otp:
+    post:
+      tags:
+        - Authentication
+      summary: Resend OTP (email or phone)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                email:
+                  type: string
+                phoneNumber:
+                  type: string
+                purpose:
+                  type: string
+      responses:
+        '200':
+          description: OTP resent
+
+  /api/user-auth/status:
+    get:
+      tags:
+        - Profile
+      summary: Get current auth status
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Authenticated status
+
+  /api/user-auth/request-email-change:
+    post:
+      tags:
+        - Profile
+      summary: Request email change (sends OTP)
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [newEmail]
+              properties:
+                newEmail:
+                  type: string
+      responses:
+        '200':
+          description: OTP sent
+
+  /api/user-auth/verify-email-change:
+    post:
+      tags:
+        - Profile
+      summary: Verify email change OTP
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [otp]
+              properties:
+                otp:
+                  type: string
+      responses:
+        '200':
+          description: Email changed
+
+  /api/user-auth/request-phone-change:
+    post:
+      tags:
+        - Profile
+      summary: Request phone change (sends OTP)
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [newPhoneNumber]
+              properties:
+                newPhoneNumber:
+                  type: string
+      responses:
+        '200':
+          description: OTP sent
+
+  /api/user-auth/verify-phone-change:
+    post:
+      tags:
+        - Profile
+      summary: Verify phone change OTP
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [otp]
+              properties:
+                otp:
+                  type: string
+      responses:
+        '200':
+          description: Phone changed
+
+  /api/auth/me:
+    get:
+      tags:
+        - User
+      summary: Get current user
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Current user
+
+  /api/auth/profile:
+    put:
+      tags:
+        - User
+      summary: Update user profile
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/User'
+      responses:
+        '200':
+          description: Profile updated
+
+  /api/courses:
+    get:
+      tags:
+        - Courses
+      summary: List courses
+      responses:
+        '200':
+          description: Courses list
+    post:
+      tags:
+        - Courses
+      summary: Create course (admin)
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Course'
+      responses:
+        '201':
+          description: Course created
+
+  /api/courses/{id}:
+    get:
+      tags:
+        - Courses
+      summary: Get course
+      parameters:
+        - in: path
+          name: id
+          schema:
+            type: string
+          required: true
+      responses:
+        '200':
+          description: Course details
+    put:
+      tags:
+        - Courses
+      summary: Update course (admin)
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Course'
+      responses:
+        '200':
+          description: Course updated
+    delete:
+      tags:
+        - Courses
+      summary: Delete course (admin)
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        '204':
+          description: Course deleted
+
+  /api/courses/{courseId}/lessons:
+    get:
+      tags:
+        - Lessons
+      summary: List lessons for a course
+      parameters:
+        - in: path
+          name: courseId
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Lessons list
+    post:
+      tags:
+        - Lessons
+      summary: Create lesson (admin)
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: courseId
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Lesson'
+      responses:
+        '201':
+          description: Lesson created
+
+  /api/lessons/{id}:
+    get:
+      tags:
+        - Lessons
+      summary: Get lesson
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Lesson details
+    put:
+      tags:
+        - Lessons
+      summary: Update lesson (admin)
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Lesson'
+      responses:
+        '200':
+          description: Lesson updated
+    delete:
+      tags:
+        - Lessons
+      summary: Delete lesson (admin)
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Lesson deleted
+
+  /api/enrollments:
+    post:
+      tags:
+        - Enrollments
+      summary: Enroll in a course
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [courseId]
+              properties:
+                courseId:
+                  type: string
+      responses:
+        '201':
+          description: Enrolled
+    get:
+      tags:
+        - Enrollments
+      summary: List user enrollments
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Enrollments list
+
+  /api/enrollments/{id}:
+    get:
+      tags:
+        - Enrollments
+      summary: Get enrollment details
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Enrollment details
+
+  /api/enrollments/{id}/progress:
+    patch:
+      tags:
+        - Enrollments
+      summary: Update lesson progress for enrollment
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                lessonId:
+                  type: string
+                completed:
+                  type: boolean
+      responses:
+        '200':
+          description: Progress updated
+
+  /api/enrollments/{id}/certificate/generate:
+    post:
+      tags:
+        - Certificates
+      summary: Queue certificate generation
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        '202':
+          description: Generation queued
+        '200':
+          description: Certificate already exists
+
+  /api/enrollments/{id}/certificate:
+    get:
+      tags:
+        - Certificates
+      summary: Get certificate metadata for an enrollment
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Certificate found
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  success:
-                    type: boolean
-                    example: false
-                  message:
-                    type: string
-                    example: Invalid admin credentials
-        '403':
-          description: Admin credentials not configured
+                $ref: '#/components/schemas/Certificate'
+        '404':
+          description: Certificate not found
+
+  /api/enrollments/{id}/certificate/download:
+    get:
+      tags:
+        - Certificates
+      summary: Download certificate PDF
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: PDF stream
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+        '404':
+          description: Certificate not found
+
+  /api/certificates:
+    get:
+      tags:
+        - Certificates
+      summary: List current user's certificates
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Certificates list
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  success:
-                    type: boolean
-                    example: false
-                  message:
-                    type: string
-                    example: Admin credentials not configured
+                type: array
+                items:
+                  $ref: '#/components/schemas/Certificate'
+
+  /api/certificates/verify/{serialHash}:
+    get:
+      tags:
+        - Certificates
+      summary: Public certificate verification by serial hash
+      parameters:
+        - in: path
+          name: serialHash
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Certificate valid
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Certificate'
+        '404':
+          description: Not found / invalid serialHash
+
+  /api/certificates/{id}:
+    get:
+      tags:
+        - Certificates
+      summary: Get certificate by id (auth)
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Certificate object
+
+  /api/users:
+    get:
+      tags:
+        - Admin
+      summary: List users (admin)
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Users list
+
+  /api/users/{id}:
+    get:
+      tags:
+        - Admin
+      summary: Get user (admin)
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: User object
+    put:
+      tags:
+        - Admin
+      summary: Update user (admin)
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/User'
+      responses:
+        '200':
+          description: User updated
+    delete:
+      tags:
+        - Admin
+      summary: Delete user (admin)
+      security:
+        - bearerAuth: []
+      responses:
+        '204':
+          description: User deleted
+
+  /api/stats:
+    get:
+      tags:
+        - Admin
+      summary: Platform stats (admin)
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Stats object
+
+  /api/lessons/{id}/transcribe:
+    post:
+      tags:
+        - Transcription
+      summary: Request transcription for lesson
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          description: Lesson ID
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '202':
+          description: Transcription request accepted and queued for processing
+  /api/lessons/{id}/transcription:
+    get:
+      tags:
+        - Transcription
+      summary: Get transcription result
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Transcription data
+
+tags:
+  - name: Health
+  - name: Authentication
+  - name: Profile
+  - name: User
+  - name: Admin
+  - name: Courses
+  - name: Lessons
+  - name: Enrollments
+  - name: Certificates
+  - name: Transcription

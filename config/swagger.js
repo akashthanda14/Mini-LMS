@@ -21,16 +21,16 @@ const options = {
     },
     servers: [
       {
-        url: 'http://localhost:3000',
-        description: 'Development server',
+        url: 'https://mini-lms-ghro.onrender.com',
+        description: 'Production server',
       },
       {
-        url: 'http://localhost:4000',
+        url: 'https://mini-lms-ghro.onrender.com',
         description: 'Alternative development server',
       },
       {
-        url: 'https://api.lms.com',
-        description: 'Production server',
+        url: 'http://localhost:4000',
+        description: 'Development server',
       },
     ],
     components: {
@@ -129,16 +129,16 @@ const options = {
     },
     tags: [
       {
+        name: 'Admin',
+        description: 'Admin authentication and management endpoints',
+      },
+      {
         name: 'Authentication',
         description: 'User authentication endpoints (registration, login, password management)',
       },
       {
         name: 'Profile',
         description: 'User profile management endpoints (email/phone change)',
-      },
-      {
-        name: 'Admin',
-        description: 'Admin authentication and management endpoints',
       },
       {
         name: 'Health',
@@ -151,4 +151,14 @@ const options = {
 
 const swaggerSpec = swaggerJsdoc(options);
 
+// --- ensure Admin tag appears first in final spec ---
+if (Array.isArray(swaggerSpec.tags)) {
+  const idx = swaggerSpec.tags.findIndex(t => t && t.name === 'Admin');
+  if (idx > 0) {
+    const [adminTag] = swaggerSpec.tags.splice(idx, 1);
+    swaggerSpec.tags.unshift(adminTag);
+  }
+}
+
+// export final spec
 export default swaggerSpec;
